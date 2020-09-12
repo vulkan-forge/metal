@@ -1,0 +1,19 @@
+[package]
+name = "magma"
+version = "0.1.0"
+authors = ["Timothée Haudebourg <author@haudebourg.net>"]
+edition = "2018"
+
+[features]
+default = [ "winit" ]
+win = [ "winit" ]
+
+[dependencies]
+ash = "^0.31"
+once_cell = "*"
+log = "*"
+
+winit = { version = "*", optional = true }
+
+[dev-dependencies]
+stderrlog = "*"
