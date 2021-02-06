@@ -10,23 +10,37 @@ use ash::{
 use crate::device;
 use super::{
 	Instance,
-	QueueFamily,
 	PhysicalDeviceInfo
 };
+
+mod memory_type;
+mod queue_family;
+
+pub use memory_type::MemoryType;
+pub use queue_family::QueueFamily;
 
 #[derive(Clone, Copy)]
 pub struct PhysicalDevice<'a> {
 	instance: &'a Arc<Instance>,
+	index: u32,
 	p: &'a PhysicalDeviceInfo
 }
 
 impl<'a> PhysicalDevice<'a> {
 	#[inline]
-	pub(crate) fn new(instance: &'a Arc<Instance>, info: &'a PhysicalDeviceInfo) -> PhysicalDevice<'a> {
+	pub(crate) fn new(instance: &'a Arc<Instance>, index: u32) -> PhysicalDevice<'a> {
+		let info = &instance.physical_devices_info[index as usize];
+
 		PhysicalDevice {
 			instance,
+			index,
 			p: info
 		}
+	}
+
+	#[inline]
+	pub fn index(&self) -> u32 {
+		self.index
 	}
 
 	#[inline]
@@ -60,5 +74,12 @@ impl<'a> PhysicalDevice<'a> {
 	#[inline]
 	pub fn supported_features(&self) -> &device::Features {
 		&self.p.supported_features
+	}
+
+	#[inline]
+	pub fn memory_types(&self) -> impl 'a + Iterator<Item=MemoryType<'a>> {
+		let this = *self;
+		let len = self.p.memory_properties.memory_type_count;
+		(0u32..len).into_iter().map(move |i| MemoryType::new(this, i))
 	}
 }

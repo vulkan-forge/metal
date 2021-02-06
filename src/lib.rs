@@ -11,8 +11,10 @@ use ash::version::EntryV1_0;
 
 #[macro_use]
 mod set;
+pub mod sync;
 pub mod instance;
 pub mod device;
+pub mod buffer;
 pub mod swapchain;
 
 #[cfg(feature = "winit")]

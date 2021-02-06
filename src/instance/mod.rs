@@ -16,7 +16,6 @@ use crate::{
 pub mod layer;
 pub mod extension;
 pub mod physical_device;
-pub mod queue_family;
 
 pub use layer::{
 	ValidationLayer,
@@ -27,7 +26,6 @@ pub use extension::{
 	Extensions
 };
 pub use physical_device::PhysicalDevice;
-pub use queue_family::QueueFamily;
 
 #[derive(Debug)]
 pub enum CreationError {
@@ -119,10 +117,13 @@ impl Instance {
 			let physical_devices_info: Vec<_> = handle.enumerate_physical_devices().unwrap().into_iter().map(|pd| {
 				let properties = handle.get_physical_device_properties(pd);
 				let supported_features = handle.get_physical_device_features(pd).into();
+				let memory_properties = handle.get_physical_device_memory_properties(pd);
+
 				PhysicalDeviceInfo {
 					handle: pd,
 					properties,
-					supported_features
+					supported_features,
+					memory_properties
 				}
 			}).collect();
 
@@ -147,8 +148,9 @@ impl Instance {
 	/// Get the list of physical devices.
 	#[inline]
 	pub fn physical_devices<'a>(self: &'a Arc<Self>) -> impl 'a + Iterator<Item=PhysicalDevice<'a>> {
-		self.physical_devices_info.iter().map(move |info| {
-			PhysicalDevice::new(self, info)
+		let len = self.physical_devices_info.len() as u32;
+		(0..len).into_iter().map(move |i| {
+			PhysicalDevice::new(self, i)
 		})
 	}
 
@@ -189,5 +191,6 @@ impl Drop for Instance {
 pub(crate) struct PhysicalDeviceInfo {
 	handle: vk::PhysicalDevice,
 	properties: vk::PhysicalDeviceProperties,
-	supported_features: device::Features
+	supported_features: device::Features,
+	memory_properties: vk::PhysicalDeviceMemoryProperties
 }

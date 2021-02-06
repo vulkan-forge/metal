@@ -13,7 +13,7 @@ use crate::{
 	instance::{
 		Extension,
 		MissingExtensionError,
-		QueueFamily
+		physical_device::QueueFamily
 	}
 };
 
@@ -104,10 +104,6 @@ impl From<MissingExtensionError> for CapabilitiesError {
 		CapabilitiesError::MissingExtension(ext)
 	}
 }
-
-// pub unsafe trait Surface {
-// 	pub fn handle(&self) -> vk::SurfaceKHR;
-// }
 
 pub struct Surface<W> {
 	instance: Arc<Instance>,

@@ -13,7 +13,7 @@ ash = "^0.31"
 once_cell = "*"
 log = "*"
 
-winit = { version = "*", optional = true }
+winit = { version = "^0.24", optional = true }
 
 [dev-dependencies]
 stderrlog = "*"

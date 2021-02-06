@@ -1,10 +1,11 @@
 use std::sync::Arc;
+use log::error;
 use magma::{
 	Entry,
 	Instance,
 	instance::{
 		PhysicalDevice,
-		QueueFamily
+		physical_device::QueueFamily
 	},
 	Device,
 	device::{
@@ -69,7 +70,10 @@ pub fn main() {
 
 	let instance = match Instance::new(entry, required_extensions) {
 		Ok(i) => Arc::new(i),
-		Err(e) => panic!("Could not build instance: {:?}", e)
+		Err(e) => {
+			error!("Could not build instance: {:?}", e);
+			std::process::exit(1);
+		}
 	};
 
 	let physical_device = Arc::new(instance.physical_devices().next().unwrap());
@@ -77,6 +81,14 @@ pub fn main() {
 
 	let event_loop = EventLoop::new();
 	let surface = WindowBuilder::new().build_vk_surface(&event_loop, &instance).unwrap();
+
+	/// Create logical device (and queues).
+	let queue_family = get_queue_family(&physical_device, &surface);
+	let (device, mut queues) = get_device(&physical_device, queue_family);
+	let queue = queues.next().unwrap();
+
+	// let surface_capabilities = surface.capabilities(device.physical_device()).unwrap();
+	// let (color_format, color_space) = choose_format(&surface_capabilities).expect("No appropriate format found");
 
 	// ...
 

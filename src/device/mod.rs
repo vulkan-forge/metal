@@ -14,13 +14,17 @@ use crate::{
 	Instance,
 	instance::{
 		PhysicalDevice,
-		QueueFamily
+		physical_device::{
+			QueueFamily,
+			MemoryType
+		}
 	}
 };
 
 pub mod extension;
 pub mod feature;
 pub mod queue;
+pub mod memory;
 
 pub use extension::{
 	Extension,
@@ -32,6 +36,7 @@ pub use feature::{
 };
 use feature::IntoFFiFeatures;
 pub use queue::Queue;
+pub use memory::Memory;
 
 #[derive(Debug)]
 pub enum CreationError {
@@ -78,9 +83,29 @@ impl From<vk::Result> for CreationError {
 	}
 }
 
+#[derive(Debug)]
+pub enum AllocationError {
+	OutOfMemory(OomError),
+	InvalidExternalHandle,
+	InvalidOpaqueCaptureAddress
+}
+
+impl From<vk::Result> for AllocationError {
+	fn from(r: vk::Result) -> AllocationError {
+		match r {
+			vk::Result::ERROR_OUT_OF_HOST_MEMORY => AllocationError::OutOfMemory(OomError::Host),
+			vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => AllocationError::OutOfMemory(OomError::Device),
+			vk::Result::ERROR_INVALID_EXTERNAL_HANDLE => AllocationError::InvalidExternalHandle,
+			vk::Result::ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR => AllocationError::InvalidOpaqueCaptureAddress,
+			_ => unreachable!()
+		}
+	}
+}
+
 pub struct Device {
 	pub(crate) handle: ash::Device,
 	instance: Arc<Instance>,
+	physical_device_index: u32,
 	loaded_extensions: Extensions
 }
 
@@ -144,6 +169,7 @@ impl Device {
 		let device = Arc::new(Device {
 			handle,
 			instance: instance.clone(),
+			physical_device_index: physical_device.index(),
 			loaded_extensions
 		});
 
@@ -153,6 +179,26 @@ impl Device {
 		};
 
 		Ok((device, queues))
+	}
+
+	#[inline]
+	pub fn physical_device(&self) -> PhysicalDevice {
+		PhysicalDevice::new(&self.instance, self.physical_device_index)
+	}
+
+	/// Allocate some device memory.
+	pub fn allocate_memory(self: &Arc<Self>, memory_type: MemoryType, size: u64) -> Result<Memory, AllocationError> {
+		let infos = vk::MemoryAllocateInfo {
+			allocation_size: size,
+			memory_type_index: memory_type.index(),
+			..Default::default()
+		};
+
+		let handle = unsafe {
+			self.handle.allocate_memory(&infos, None)?
+		};
+
+		Ok(Memory::new(self, memory_type, size, handle))
 	}
 }
 
