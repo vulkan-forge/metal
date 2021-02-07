@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+	sync::Arc,
+	ops::Deref
+};
 use ash::vk;
 use crate::{
 	instance::physical_device::MemoryType,
@@ -45,4 +48,15 @@ impl Memory {
 	pub fn memory_type(&self) -> MemoryType {
 		MemoryType::new(self.device.physical_device(), self.memory_type_index)
 	}
+
+	#[inline]
+	pub fn into_host_visible_memory(self) -> Result<HostVisibleMemory, Self> {
+		if self.memory_type().is_host_visible() {
+			Ok(HostVisibleMemory(self))
+		} else {
+			Err(self)
+		}
+	}
 }
+
+pub struct HostVisibleMemory(Memory);

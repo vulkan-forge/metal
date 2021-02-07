@@ -202,9 +202,19 @@ impl Device {
 	}
 }
 
+pub trait DeviceOwned {
+	fn device(&self) -> &Arc<Device>;
+}
+
 pub struct Queues {
 	device: Arc<Device>,
 	index_iter: std::vec::IntoIter<(u32, u32)>
+}
+
+impl DeviceOwned for Queues {
+	fn device(&self) -> &Arc<Device> {
+		&self.device
+	}
 }
 
 impl Iterator for Queues {

@@ -25,7 +25,10 @@ use instance::{
 };
 
 pub use instance::Instance;
-pub use device::Device;
+pub use device::{
+	Device,
+	DeviceOwned
+};
 
 pub struct Entry {
 	handle: ash::Entry,

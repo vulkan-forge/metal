@@ -2,10 +2,14 @@ use ash::{
 	vk,
 	version::DeviceV1_0
 };
-use std::sync::Arc;
+use std::{
+	sync::Arc,
+	ops::Deref
+};
 use crate::{
 	device,
 	Device,
+	DeviceOwned,
 	OomError,
 	sync::SharingMode
 };
@@ -150,6 +154,11 @@ impl UnboundBuffer {
 	}
 
 	#[inline]
+	pub fn size(&self) -> u64 {
+		self.size
+	}
+
+	#[inline]
 	pub fn memory_requirements(&self) -> MemoryRequirements {
 		unsafe {
 			let mr = self.device.handle.get_buffer_memory_requirements(self.handle);
@@ -158,31 +167,45 @@ impl UnboundBuffer {
 	}
 
 	#[inline]
-	pub fn bind(self, memory: &device::Memory, offset: u64) -> Result<Buffer, BindError> {
-		// // Check for alignment correctness.
-		// {
-		// 	let limits = self.device.physical_device().limits();
-		// 	if self.usage.uniform_texel_buffer() || self.usage.storage_texel_buffer() {
-		// 		debug_assert!(offset % limits.min_texel_buffer_offset_alignment() as usize == 0);
-		// 	}
-
-		// 	if self.usage.storage_buffer() {
-		// 		debug_assert!(offset % limits.min_storage_buffer_offset_alignment() as usize == 0);
-		// 	}
-
-		// 	if self.usage.uniform_buffer() {
-		// 		debug_assert!(offset % limits.min_uniform_buffer_offset_alignment() as usize == 0);
-		// 	}
-		// }
-
+	pub unsafe fn bind(self, memory: &device::Memory, offset: u64) -> Result<Buffer, (Self, BindError)> {
+		// We check for correctness in debug mode.
+		debug_assert!({
+			let mem_reqs = self.memory_requirements();
+			mem_reqs.size() <= (memory.size() - offset) as u64
+				&& (offset as u64 % mem_reqs.alignment()) == 0
+				&& mem_reqs.contains_memory_type_index(memory.memory_type().index())
+		});
 		
-		unsafe {
-			self.device.handle.bind_buffer_memory(self.handle, memory.handle(), offset)?
+		// Check for alignment correctness.
+		{
+			let limits = self.device.physical_device().limits();
+			if self.usage.uniform_texel_buffer() || self.usage.storage_texel_buffer() {
+				debug_assert!(offset % limits.min_texel_buffer_offset_alignment() == 0);
+			}
+
+			if self.usage.storage_buffer() {
+				debug_assert!(offset % limits.min_storage_buffer_offset_alignment() == 0);
+			}
+
+			if self.usage.uniform_buffer() {
+				debug_assert!(offset % limits.min_uniform_buffer_offset_alignment() == 0);
+			}
+		}
+
+		match self.device.handle.bind_buffer_memory(self.handle, memory.handle(), offset) {
+			Ok(()) => (),
+			Err(e) => return Err((self, e.into()))
 		}
 
 		Ok(Buffer {
 			inner: self
 		})
+	}
+}
+
+impl DeviceOwned for UnboundBuffer {
+	fn device(&self) -> &Arc<Device> {
+		&self.device
 	}
 }
 
@@ -197,4 +220,33 @@ impl Drop for UnboundBuffer {
 /// Bound buffer.
 pub struct Buffer {
 	inner: UnboundBuffer
+}
+
+impl DeviceOwned for Buffer {
+	fn device(&self) -> &Arc<Device> {
+		self.inner.device()
+	}
+}
+
+impl Deref for Buffer {
+	type Target = UnboundBuffer;
+
+	fn deref(&self) -> &UnboundBuffer {
+		&self.inner
+	}
+}
+
+/// Host visible buffer.
+/// 
+/// The data on this buffer can be accessed by the host.
+/// 
+/// Note that de data may not be coherent depending on the bound memory type.
+pub struct HostVisibleBuffer {
+	inner: UnboundBuffer
+}
+
+impl DeviceOwned for HostVisibleBuffer {
+	fn device(&self) -> &Arc<Device> {
+		self.inner.device()
+	}
 }

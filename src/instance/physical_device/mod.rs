@@ -13,9 +13,11 @@ use super::{
 	PhysicalDeviceInfo
 };
 
+mod limits;
 mod memory_type;
 mod queue_family;
 
+pub use limits::Limits;
 pub use memory_type::MemoryType;
 pub use queue_family::QueueFamily;
 
@@ -81,5 +83,9 @@ impl<'a> PhysicalDevice<'a> {
 		let this = *self;
 		let len = self.p.memory_properties.memory_type_count;
 		(0u32..len).into_iter().map(move |i| MemoryType::new(this, i))
+	}
+
+	pub fn limits(&self) -> Limits<'a> {
+		Limits::from_vk_limits(&self.p.properties.limits)
 	}
 }

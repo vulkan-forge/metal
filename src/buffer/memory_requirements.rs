@@ -9,8 +9,13 @@ impl MemoryRequirements {
 	}
 
 	#[inline]
-	pub fn alignemnt(&self) -> u64 {
+	pub fn alignment(&self) -> u64 {
 		self.0.alignment
+	}
+
+	#[inline]
+	pub fn memory_type_bits(&self) -> u32 {
+		self.0.memory_type_bits
 	}
 
 	#[inline]
