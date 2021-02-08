@@ -16,6 +16,9 @@ pub mod instance;
 pub mod device;
 pub mod buffer;
 pub mod swapchain;
+pub mod alloc;
+pub mod format;
+pub mod image;
 
 #[cfg(feature = "winit")]
 pub mod win;
@@ -29,6 +32,7 @@ pub use device::{
 	Device,
 	DeviceOwned
 };
+pub use format::Format;
 
 pub struct Entry {
 	handle: ash::Entry,

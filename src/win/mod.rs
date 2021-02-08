@@ -101,8 +101,23 @@ pub fn create_winit_surface(instance: &Arc<Instance>, window: Window) -> Result<
 				Surface::from_wayland(instance, display, surface, window)
 			},
 			_ => {
-				// no wayland display found.
-				panic!("Only wayland is supported for now")
+				// No wayland display found, check if we can use xlib.
+				// If not, we use xcb.
+				if instance.loaded_extensions().khr_xlib_surface {
+					Surface::from_xlib(
+						instance,
+						window.xlib_display().unwrap(),
+						window.xlib_window().unwrap() as _,
+						window
+					)
+				} else {
+					Surface::from_xcb(
+						instance,
+						window.xcb_connection().unwrap(),
+						window.xlib_window().unwrap() as _,
+						window,
+					)
+				}
 			}
 		}
 	}

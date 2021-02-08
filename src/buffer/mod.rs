@@ -7,16 +7,24 @@ use std::{
 	ops::Deref
 };
 use crate::{
-	device,
 	Device,
 	DeviceOwned,
 	OomError,
-	sync::SharingMode
+	sync::SharingMode,
+	alloc::{
+		self,
+		Allocator,
+		Slot
+	}
 };
 
 mod memory_requirements;
 
 pub use memory_requirements::MemoryRequirements;
+
+pub trait Buffer {
+	fn handle(&self) -> vk::Buffer;
+}
 
 #[derive(Clone, Copy)]
 pub struct Usage(vk::BufferUsageFlags);
@@ -112,10 +120,7 @@ pub struct UnboundBuffer {
 
 impl UnboundBuffer {
 	/// Create a raw, uninitialized buffer of the given size.
-	pub fn new<Q>(device: &Arc<Device>, size: u64, usage: Usage, sharing_mode: SharingMode<Q>) -> Result<Self, CreationError>
-	where
-		Q: Iterator<Item = u32>
-	{
+	pub fn new(device: &Arc<Device>, size: u64, usage: Usage, sharing_mode: SharingMode) -> Result<Self, CreationError> {
 		assert!(!usage.is_empty());
 
 		let infos = match sharing_mode {
@@ -128,14 +133,12 @@ impl UnboundBuffer {
 				}
 			},
 			SharingMode::Concurrent(queues) => {
-				let indices: Vec<u32> = queues.collect();
-				
 				vk::BufferCreateInfo {
 					size,
 					usage: usage.into_vulkan_flags(),
 					sharing_mode: vk::SharingMode::CONCURRENT,
-					queue_family_index_count: indices.len() as u32,
-					p_queue_family_indices: indices.as_ptr(),
+					queue_family_index_count: queues.len() as u32,
+					p_queue_family_indices: queues.as_ptr(),
 					..Default::default()
 				}
 			}
@@ -167,12 +170,14 @@ impl UnboundBuffer {
 	}
 
 	#[inline]
-	pub unsafe fn bind(self, memory: &device::Memory, offset: u64) -> Result<Buffer, (Self, BindError)> {
+	pub unsafe fn bind<A: Allocator>(self, slot: A::Slot) -> Result<alloc::Buffer<A>, (Self, BindError)> {
+		let memory = slot.memory();
+		
 		// We check for correctness in debug mode.
 		debug_assert!({
 			let mem_reqs = self.memory_requirements();
-			mem_reqs.size() <= (memory.size() - offset) as u64
-				&& (offset as u64 % mem_reqs.alignment()) == 0
+			mem_reqs.size() <= (memory.size() - slot.offset()) as u64
+				&& (slot.offset() as u64 % mem_reqs.alignment()) == 0
 				&& mem_reqs.contains_memory_type_index(memory.memory_type().index())
 		});
 		
@@ -180,26 +185,24 @@ impl UnboundBuffer {
 		{
 			let limits = self.device.physical_device().limits();
 			if self.usage.uniform_texel_buffer() || self.usage.storage_texel_buffer() {
-				debug_assert!(offset % limits.min_texel_buffer_offset_alignment() == 0);
+				debug_assert!(slot.offset() % limits.min_texel_buffer_offset_alignment() == 0);
 			}
 
 			if self.usage.storage_buffer() {
-				debug_assert!(offset % limits.min_storage_buffer_offset_alignment() == 0);
+				debug_assert!(slot.offset() % limits.min_storage_buffer_offset_alignment() == 0);
 			}
 
 			if self.usage.uniform_buffer() {
-				debug_assert!(offset % limits.min_uniform_buffer_offset_alignment() == 0);
+				debug_assert!(slot.offset() % limits.min_uniform_buffer_offset_alignment() == 0);
 			}
 		}
 
-		match self.device.handle.bind_buffer_memory(self.handle, memory.handle(), offset) {
+		match self.device.handle.bind_buffer_memory(self.handle, memory.handle(), slot.offset()) {
 			Ok(()) => (),
 			Err(e) => return Err((self, e.into()))
 		}
 
-		Ok(Buffer {
-			inner: self
-		})
+		Ok(alloc::Buffer::new(self, slot))
 	}
 }
 
@@ -214,39 +217,5 @@ impl Drop for UnboundBuffer {
 		unsafe {
 			self.device.handle.destroy_buffer(self.handle, None);
 		}
-	}
-}
-
-/// Bound buffer.
-pub struct Buffer {
-	inner: UnboundBuffer
-}
-
-impl DeviceOwned for Buffer {
-	fn device(&self) -> &Arc<Device> {
-		self.inner.device()
-	}
-}
-
-impl Deref for Buffer {
-	type Target = UnboundBuffer;
-
-	fn deref(&self) -> &UnboundBuffer {
-		&self.inner
-	}
-}
-
-/// Host visible buffer.
-/// 
-/// The data on this buffer can be accessed by the host.
-/// 
-/// Note that de data may not be coherent depending on the bound memory type.
-pub struct HostVisibleBuffer {
-	inner: UnboundBuffer
-}
-
-impl DeviceOwned for HostVisibleBuffer {
-	fn device(&self) -> &Arc<Device> {
-		self.inner.device()
 	}
 }

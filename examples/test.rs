@@ -14,12 +14,15 @@ use magma::{
 		Queue
 	},
 	swapchain::{
-		Surface
+		Surface,
+		Capabilities,
+		capabilities::ColorSpace
 	},
 	win::{
 		self,
 		WindowBuilderExt
-	}
+	},
+	Format
 };
 use winit::{
 	event_loop::EventLoop,
@@ -57,6 +60,17 @@ fn get_device<'a>(physical_device: &'a PhysicalDevice, queue_family: QueueFamily
 	).unwrap()
 }
 
+// Choose a surface format and color space.
+fn choose_format(surface_capabilities: &Capabilities) -> Option<(Format, ColorSpace)> {
+	for (format, color_space) in &surface_capabilities.supported_formats {
+		if *format == Format::B8G8R8A8Srgb && *color_space == ColorSpace::SrgbNonLinear {
+			return Some((*format, *color_space))
+		}
+	}
+
+	None
+}
+
 pub fn main() {
 	stderrlog::new().verbosity(3).init().unwrap();
 
@@ -82,15 +96,30 @@ pub fn main() {
 	let event_loop = EventLoop::new();
 	let surface = WindowBuilder::new().build_vk_surface(&event_loop, &instance).unwrap();
 
-	/// Create logical device (and queues).
+	// Create logical device (and queues).
 	let queue_family = get_queue_family(&physical_device, &surface);
 	let (device, mut queues) = get_device(&physical_device, queue_family);
 	let queue = queues.next().unwrap();
 
-	// let surface_capabilities = surface.capabilities(device.physical_device()).unwrap();
-	// let (color_format, color_space) = choose_format(&surface_capabilities).expect("No appropriate format found");
+	let surface_capabilities = surface.capabilities(device.physical_device()).unwrap();
+	let (color_format, color_space) = choose_format(&surface_capabilities).expect("No appropriate format found");
 
-	// ...
+	let (swapchain, images) = Swapchain::new(
+		device.clone(),
+		surface.clone(),
+		surface_capabilities.min_image_count,
+		format,
+		dimensions, // TODO check if the dimensions are supported by the swapchain.
+		1,
+		ImageUsage::color_attachment(),
+		&queue,
+		surface_capabilities.current_transform,
+		CompositeAlpha::Opaque, // ignore alpha component.
+		PresentMode::Fifo, // guaranteed to exist.
+		FullscreenExclusive::Default,
+		true,
+		color_space
+	).unwrap();
 
 	event_loop.run(move |event, _, _| {
 		// TODO

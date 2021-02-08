@@ -10,6 +10,7 @@ win = [ "winit" ]
 
 [dependencies]
 ash = "^0.31"
+half = "*"
 once_cell = "*"
 log = "*"
 

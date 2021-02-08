@@ -69,6 +69,8 @@ pub struct Instance {
 	loaded_extensions: Extensions,
 	physical_devices_info: Vec<PhysicalDeviceInfo>,
 	ext_khr_surface: OnceCell<ash::extensions::khr::Surface>,
+	ext_khr_xcb_surface: OnceCell<ash::extensions::khr::XcbSurface>,
+	ext_khr_xlib_surface: OnceCell<ash::extensions::khr::XlibSurface>,
 	ext_khr_wayland_surface: OnceCell<ash::extensions::khr::WaylandSurface>
 }
 
@@ -133,6 +135,8 @@ impl Instance {
 				loaded_extensions,
 				physical_devices_info,
 				ext_khr_surface: OnceCell::new(),
+				ext_khr_xcb_surface: OnceCell::new(),
+				ext_khr_xlib_surface: OnceCell::new(),
 				ext_khr_wayland_surface: OnceCell::new()
 			};
 
@@ -165,6 +169,26 @@ impl Instance {
 				Ok(ash::extensions::khr::Surface::new(&self.entry.handle, &self.handle))
 			} else {
 				Err(MissingExtensionError(Extension::KhrSurface))
+			}
+		})
+	}
+
+	pub fn ext_khr_xcb_surface(&self) -> Result<&ash::extensions::khr::XcbSurface, MissingExtensionError> {
+		self.ext_khr_xcb_surface.get_or_try_init(|| {
+			if self.loaded_extensions.khr_xcb_surface {
+				Ok(ash::extensions::khr::XcbSurface::new(&self.entry.handle, &self.handle))
+			} else {
+				Err(MissingExtensionError(Extension::KhrXcbSurface))
+			}
+		})
+	}
+
+	pub fn ext_khr_xlib_surface(&self) -> Result<&ash::extensions::khr::XlibSurface, MissingExtensionError> {
+		self.ext_khr_xlib_surface.get_or_try_init(|| {
+			if self.loaded_extensions.khr_xlib_surface {
+				Ok(ash::extensions::khr::XlibSurface::new(&self.entry.handle, &self.handle))
+			} else {
+				Err(MissingExtensionError(Extension::KhrXlibSurface))
 			}
 		})
 	}

@@ -1,13 +1,14 @@
-use std::{
-	sync::Arc,
-	fmt
-};
+use once_cell::sync::OnceCell;
 use ash::{
 	vk,
 	version::{
 		InstanceV1_0,
 		DeviceV1_0
 	}
+};
+use std::{
+	sync::Arc,
+	fmt
 };
 use crate::{
 	OomError,
@@ -102,11 +103,15 @@ impl From<vk::Result> for AllocationError {
 	}
 }
 
+#[derive(Debug)]
+pub struct MissingExtensionError(pub Extension);
+
 pub struct Device {
 	pub(crate) handle: ash::Device,
 	instance: Arc<Instance>,
 	physical_device_index: u32,
-	loaded_extensions: Extensions
+	loaded_extensions: Extensions,
+	ext_khr_swapchain: OnceCell<ash::extensions::khr::Swapchain>
 }
 
 impl Device {
@@ -170,7 +175,8 @@ impl Device {
 			handle,
 			instance: instance.clone(),
 			physical_device_index: physical_device.index(),
-			loaded_extensions
+			loaded_extensions,
+			ext_khr_swapchain: OnceCell::new()
 		});
 
 		let queues = Queues {
@@ -199,6 +205,16 @@ impl Device {
 		};
 
 		Ok(Memory::new(self, memory_type, size, handle))
+	}
+
+	pub fn ext_khr_swapchain(&self) -> Result<&ash::extensions::khr::Swapchain, MissingExtensionError> {
+		self.ext_khr_swapchain.get_or_try_init(|| {
+			if self.loaded_extensions.khr_swapchain {
+				Ok(ash::extensions::khr::Swapchain::new(&self.instance.handle, &self.handle))
+			} else {
+				Err(MissingExtensionError(Extension::KhrSwapchain))
+			}
+		})
 	}
 }
 

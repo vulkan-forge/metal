@@ -1,12 +1,34 @@
 use std::{
 	sync::Arc,
-	ops::Deref
+	ffi::c_void
 };
-use ash::vk;
+use ash::{
+	vk,
+	version::DeviceV1_0
+};
 use crate::{
+	OomError,
 	instance::physical_device::MemoryType,
-	Device
+	Device,
+	DeviceOwned
 };
+
+#[derive(Debug)]
+pub enum MapError {
+	OutOfMemory(OomError),
+	MemoryMapFailed
+}
+
+impl From<vk::Result> for MapError {
+	fn from(r: vk::Result) -> MapError {
+		match r {
+			vk::Result::ERROR_OUT_OF_HOST_MEMORY => MapError::OutOfMemory(OomError::Host),
+			vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => MapError::OutOfMemory(OomError::Device),
+			vk::Result::ERROR_MEMORY_MAP_FAILED => MapError::MemoryMapFailed,
+			_ => unreachable!()
+		}
+	}
+}
 
 /// A region of allocated device memory.
 pub struct Memory {
@@ -49,14 +71,34 @@ impl Memory {
 		MemoryType::new(self.device.physical_device(), self.memory_type_index)
 	}
 
+	/// Map the memory to host address space.
+	/// 
+	/// # Safety
+	/// 
+	/// The memory must be host visible and not already mapped.
 	#[inline]
-	pub fn into_host_visible_memory(self) -> Result<HostVisibleMemory, Self> {
-		if self.memory_type().is_host_visible() {
-			Ok(HostVisibleMemory(self))
-		} else {
-			Err(self)
-		}
+	pub unsafe fn map(&self, offset: u64, size: u64) -> Result<*mut c_void, MapError> {
+		let ptr = self.device.handle.map_memory(
+			self.handle,
+			offset,
+			size,
+			vk::MemoryMapFlags::empty()
+		)?;
+		Ok(ptr)
+	}
+
+	/// Unmap the memory from host address space.
+	/// 
+	/// # Safety
+	/// 
+	/// The memory must be mapped.
+	pub unsafe fn unmap(&self) {
+		self.device.handle.unmap_memory(self.handle)
 	}
 }
 
-pub struct HostVisibleMemory(Memory);
+impl DeviceOwned for Memory {
+	fn device(&self) -> &Arc<Device> {
+		&self.device
+	}
+}
