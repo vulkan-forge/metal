@@ -47,7 +47,7 @@ impl From<vk::Result> for CreationError {
 	}
 }
 
-pub struct Graphics<S, D> {
+pub struct Graphics<S, D, const V: usize> {
 	device: Arc<Device>,
 	render_subpass: framebuffer::render_pass::subpass::Reference,
 	handle: vk::Pipeline,
@@ -55,15 +55,15 @@ pub struct Graphics<S, D> {
 	dynamic_state: PhantomData<D>
 }
 
-impl<S: Stages, D: DynamicStates> Graphics<S, D> {
+impl<S: Stages, D: DynamicStates, const V: usize> Graphics<S, D, V> {
 	/// Creates a new graphics pipeline.
 	pub fn new(
 		device: &Arc<Device>,
 		stages: S,
 		vertex_input_and_assembly: Option<(VertexInput, InputAssembly)>,
 		tesselation: Option<Tesselation>,
-		viewports: &[Viewport],
-		scissors: &[Scissor],
+		viewports: [Viewport; V],
+		scissors: [Scissor; V],
 		rasterization: Rasterization,
 		multisample: Multisample,
 		depth_test: Option<DepthTest>,
@@ -71,7 +71,7 @@ impl<S: Stages, D: DynamicStates> Graphics<S, D> {
 		color_blend: ColorBlend,
 		layout: &Arc<Layout>,
 		render_subpass: framebuffer::render_pass::subpass::Reference
-	) -> Result<Graphics<S, D>, CreationError> {
+	) -> Result<Graphics<S, D, V>, CreationError> {
 		let mut vk_stages = Vec::new();
 		stages.for_each(|stage| vk_stages.push(vk::PipelineShaderStageCreateInfo {
 			stage: stage.ty.into_vulkan(),
@@ -171,13 +171,19 @@ impl<S: Stages, D: DynamicStates> Graphics<S, D> {
 	}
 }
 
-impl<S, D: dynamic_state::WithViewport> Graphics<S, D> {
-	pub fn set_viewport(&mut self, viewports: &[Viewport]) {
+impl<S, D: dynamic_state::WithViewport, const V: usize> Graphics<S, D, V> {
+	pub fn set_viewports(&mut self, viewports: [Viewport; V]) {
 		panic!("TODO")
 	}
 }
 
-impl<S, D> Drop for Graphics<S, D> {
+impl<S, D: dynamic_state::WithViewport, const V: usize> Graphics<S, D, V> {
+	pub fn set_scissors(&mut self, scissors: [Scissor; V]) {
+		panic!("TODO")
+	}
+}
+
+impl<S, D, const V: usize> Drop for Graphics<S, D, V> {
 	fn drop(&mut self) {
 		unsafe {
 			self.device.handle().destroy_pipeline(self.handle, None)

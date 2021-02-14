@@ -62,6 +62,15 @@ pub struct ColorComponents {
 }
 
 impl ColorComponents {
+	pub fn rgba() -> Self {
+		Self {
+			red: true,
+			green: true,
+			blue: true,
+			alpha: true
+		}
+	}
+
 	pub(crate) fn into_vulkan(self) -> vk::ColorComponentFlags {
 		let mut flags = vk::ColorComponentFlags::empty();
 
@@ -130,11 +139,11 @@ pub struct Attachment(vk::PipelineColorBlendAttachmentState);
 impl Attachment {
 	pub fn new(
 		blend: Option<AttachmentBlend>,
-		color_write_mask: ColorComponents
+		color_write_components: ColorComponents
 	) -> Attachment {
 		let mut inner = vk::PipelineColorBlendAttachmentState {
 			blend_enable: vk::FALSE,
-			color_write_mask: color_write_mask.into_vulkan(),
+			color_write_mask: color_write_components.into_vulkan(),
 			..Default::default()
 		};
 
@@ -171,6 +180,11 @@ impl ColorBlend {
 		self.attachments.push(a);
 		self.inner.attachment_count = self.attachments.len() as u32;
 		self.inner.p_attachments = self.attachments.as_ptr() as *const _;
+	}
+
+	pub fn with_attachment(mut self, a: Attachment) -> Self {
+		self.add_attachment(a);
+		self
 	}
 
 	pub(crate) fn as_vulkan(&self) -> &vk::PipelineColorBlendStateCreateInfo {

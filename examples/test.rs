@@ -31,14 +31,23 @@ use magma::{
 	image,
 	pipeline::{
 		self,
-		shader
+		shader,
+		Viewport,
+		Scissor,
+		ColorBlend,
+		color_blend::{
+			self,
+			BlendFactor
+		},
+		Layout
 	},
 	win::{
 		self,
 		WindowBuilderExt
 	},
 	framebuffer,
-	Format
+	Format,
+	ops
 };
 use winit::{
 	event_loop::EventLoop,
@@ -119,13 +128,15 @@ pub fn main() {
 
 	let render_pass = create_render_pass(&device, swapchain.format());
 
-	let pipeline = pipeline::Graphics::<_, ()>::new(
+	let layout = Arc::new(Layout::new(&device, &[], &[]).expect("unable to create pipeline layout"));
+
+	let pipeline = pipeline::Graphics::<_, (), 1>::new(
 		&device,
 		stages,
 		None, // no vertex input/assembly
 		None, // no tesselation
-		&[], // TODO viewports
-		&[], // TODO scissors
+		[Viewport::new(0.0, 0.0, dimensions.0 as f32, dimensions.1 as f32, 0.0, 1.0)],
+		[Scissor::new(0, 0, dimensions.0, dimensions.1)],
 		pipeline::Rasterization::new(
 			false,
 			false,
@@ -138,10 +149,20 @@ pub fn main() {
 		pipeline::Multisample::default(), // no multisampling
 		None,
 		None,
-		panic!("TODO color blending"),
-		panic!("TODO layout"),
+		ColorBlend::new(None, [0.0, 0.0, 0.0, 0.0]).with_attachment(color_blend::Attachment::new(
+			Some(color_blend::AttachmentBlend::new(
+				BlendFactor::SourceAlpha,
+				BlendFactor::OneMinusSourceAlpha,
+				color_blend::Operation::Add,
+				BlendFactor::One,
+				BlendFactor::Zero,
+				color_blend::Operation::Add
+			)),
+			color_blend::ColorComponents::rgba()
+		)),
+		&layout,
 		render_pass.subpass(0).unwrap()
-	);
+	).expect("unable to create pipeline");
 
 	event_loop.run(move |event, _, _| {
 		// TODO

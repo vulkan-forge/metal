@@ -10,7 +10,7 @@ win = [ "winit" ]
 
 [dependencies]
 ash = "^0.31"
-cc-traits = { path = "../../utils/traits/cc-traits" }
+cc-traits = { path = "../../traits/cc-traits" }
 once_cell = "*"
 log = "*"
 

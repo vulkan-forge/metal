@@ -41,3 +41,14 @@ unsafe impl<D: DynamicStates> DynamicStates for Viewport<D> {
 		D::for_each(f)
 	}
 }
+
+pub struct Scissor<D: DynamicStates>(PhantomData<D>);
+pub unsafe trait WithScissor {}
+unsafe impl<D: DynamicStates> WithScissor for Scissor<D> {}
+
+unsafe impl<D: DynamicStates> DynamicStates for Scissor<D> {
+	fn for_each<F>(mut f: F) where F: FnMut(DynamicState) -> () {
+		f(DynamicState::Scissor);
+		D::for_each(f)
+	}
+}
