@@ -119,11 +119,6 @@ pub struct Surface<W> {
 }
 
 impl<W> Surface<W> {
-	#[inline]
-	pub(crate) fn handle(&self) -> vk::SurfaceKHR {
-		self.handle
-	}
-
 	/// Creates a `Surface` from an XCB window.
 	///
 	/// The surface's min, max and current extent will always match the window's dimensions.
@@ -300,6 +295,16 @@ impl<W> Surface<W> {
 			handle,
 			backend
 		})
+	}
+
+	#[inline]
+	pub(crate) fn handle(&self) -> vk::SurfaceKHR {
+		self.handle
+	}
+
+	#[inline]
+	pub fn backend(&self) -> &W {
+		&self.backend
 	}
 
 	/// Queue family supports presentation on the given surface.

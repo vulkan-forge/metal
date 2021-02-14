@@ -187,6 +187,10 @@ impl Device {
 		Ok((device, queues))
 	}
 
+	pub fn handle(&self) -> &ash::Device {
+		&self.handle
+	}
+
 	#[inline]
 	pub fn physical_device(&self) -> PhysicalDevice {
 		PhysicalDevice::new(&self.instance, self.physical_device_index)
@@ -243,7 +247,7 @@ impl Iterator for Queues {
 					self.device.handle.get_device_queue(queue_family_index, queue_index)
 				};
 
-				let queue = Queue::new(&self.device, handle);
+				let queue = Queue::new(&self.device, handle, queue_family_index, queue_index);
 				Some(Arc::new(queue))
 			},
 			None => None

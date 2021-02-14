@@ -120,12 +120,14 @@ impl Instance {
 				let properties = handle.get_physical_device_properties(pd);
 				let supported_features = handle.get_physical_device_features(pd).into();
 				let memory_properties = handle.get_physical_device_memory_properties(pd);
+				let queue_family_properties = handle.get_physical_device_queue_family_properties(pd);
 
 				PhysicalDeviceInfo {
 					handle: pd,
 					properties,
 					supported_features,
-					memory_properties
+					memory_properties,
+					queue_family_properties
 				}
 			}).collect();
 
@@ -216,5 +218,6 @@ pub(crate) struct PhysicalDeviceInfo {
 	handle: vk::PhysicalDevice,
 	properties: vk::PhysicalDeviceProperties,
 	supported_features: device::Features,
-	memory_properties: vk::PhysicalDeviceMemoryProperties
+	memory_properties: vk::PhysicalDeviceMemoryProperties,
+	queue_family_properties: Vec<vk::QueueFamilyProperties>
 }

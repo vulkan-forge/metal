@@ -5,8 +5,7 @@ use crate::{
 	Device,
 	device,
 	Format,
-	image::Usage,
-	sync::SharingMode
+	image::Usage
 };
 
 pub mod surface;
@@ -26,9 +25,12 @@ pub use image::Image;
 pub struct Swapchain<W> {
 	device: Arc<Device>,
 	surface: Arc<Surface<W>>,
-	handle: vk::SwapchainKHR
+	handle: vk::SwapchainKHR,
+	format: Format,
+	color_space: ColorSpace
 }
 
+#[derive(Debug)]
 pub enum CreationError {
 	OomError(OomError),
 	DeviceLost,
@@ -66,23 +68,45 @@ impl From<vk::Result> for CreationError {
 	}
 }
 
+#[derive(Debug)]
+pub enum ImagesError {
+	OomError(OomError),
+	MissingDeviceExtension(device::MissingExtensionError)
+}
+
+impl From<device::MissingExtensionError> for ImagesError {
+	fn from(e: device::MissingExtensionError) -> Self {
+		ImagesError::MissingDeviceExtension(e)
+	}
+}
+
+impl From<vk::Result> for ImagesError {
+	fn from(e: vk::Result) -> Self {
+		match e {
+			vk::Result::ERROR_OUT_OF_HOST_MEMORY => ImagesError::OomError(OomError::Host),
+			vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => ImagesError::OomError(OomError::Device),
+			_ => unreachable!()
+		}
+	}
+}
+
 impl<W> Swapchain<W> {
-	pub fn new(
-		device: Arc<Device>,
-		surface: Arc<Surface<W>>,
+	pub fn new<'a, S: IntoIterator<Item=&'a Arc<device::Queue>>>(
+		device: &Arc<Device>,
+		surface: &Arc<Surface<W>>,
 		num_images: u32,
 		format: Format,
 		color_space: ColorSpace,
 		dimensions: Option<(u32, u32)>,
 		layers: u32,
 		usage: Usage,
-		sharing_mode: SharingMode,
+		sharing_queues: S,
 		transform: SurfaceTransform,
 		alpha: CompositeAlpha,
 		mode: PresentMode,
 		clipped: bool,
 		old_swapchain: Option<&Swapchain<W>>
-	) -> Result<(Swapchain<W>, Vec<Image>), CreationError> {
+	) -> Result<Swapchain<W>, CreationError> {
 		let capabilities = surface.capabilities(device.physical_device())?;
 
 		let dimensions = if let Some(dimensions) = dimensions {
@@ -104,11 +128,14 @@ impl<W> Swapchain<W> {
 			(extent[0], extent[1])
 		};
 
-		let (sh_mode, sh_count, sh_indices) = match sharing_mode {
-			SharingMode::Exclusive => (vk::SharingMode::EXCLUSIVE, 0, std::ptr::null()),
-			SharingMode::Concurrent(ref ids) => {
-				(vk::SharingMode::CONCURRENT, ids.len() as u32, ids.as_ptr())
-			}
+		let mut ids: Vec<u32> = sharing_queues.into_iter().map(|q| q.family_index()).collect();
+		ids.sort();
+		ids.dedup();
+
+		let (sh_mode, sh_count, sh_indices) = if ids.len() > 1 {
+			(vk::SharingMode::EXCLUSIVE, 0, std::ptr::null())
+		} else {
+			(vk::SharingMode::CONCURRENT, ids.len() as u32, ids.as_ptr())
 		};
 
 		let infos = vk::SwapchainCreateInfoKHR {
@@ -143,25 +170,43 @@ impl<W> Swapchain<W> {
 			ext_khr_swapchain.create_swapchain(&infos, None)?
 		};
 
-		let image_handles = unsafe {
-			ext_khr_swapchain.get_swapchain_images(handle)?
-		};
-
-		let images: Vec<Image> = image_handles.into_iter().map(|handle| {
-			Image::new(handle)
-		}).collect();
-
 		let swapchain = Swapchain {
 			device: device.clone(),
 			surface: surface.clone(),
-			handle
+			handle,
+			format,
+			color_space
 		};
 
-		Ok((swapchain, images))
+		Ok(swapchain)
 	}
 
 	#[inline]
 	pub(crate) fn handle(&self) -> vk::SwapchainKHR {
 		self.handle
+	}
+
+	pub fn images(self: &Arc<Self>) -> Result<Vec<Image<W>>, ImagesError> {
+		let ext_khr_swapchain = self.device.ext_khr_swapchain()?;
+
+		let image_handles = unsafe {
+			ext_khr_swapchain.get_swapchain_images(self.handle)?
+		};
+
+		let images: Vec<Image<W>> = image_handles.into_iter().map(|handle| {
+			Image::new(self.clone(), handle)
+		}).collect();
+
+		Ok(images)
+	}
+
+	#[inline]
+	pub fn format(&self) -> Format {
+		self.format
+	}
+
+	#[inline]
+	pub fn color_space(&self) -> ColorSpace {
+		self.color_space
 	}
 }

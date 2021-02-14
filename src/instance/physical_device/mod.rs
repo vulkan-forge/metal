@@ -65,12 +65,16 @@ impl<'a> PhysicalDevice<'a> {
 
 	#[inline]
 	pub fn queue_families(&self) -> impl 'a + Iterator<Item=QueueFamily<'a>> {
-		unsafe {
-			let this = *self;
-			self.instance.handle.get_physical_device_queue_family_properties(self.p.handle).into_iter().enumerate().map(move |(i, qf)| {
-				QueueFamily::new(this, i as u32, qf)
-			})
-		}
+		let this = *self;
+		self.p.queue_family_properties.iter().enumerate().map(move |(i, qf)| {
+			QueueFamily::new(this, i as u32, qf)
+		})
+	}
+
+	#[inline]
+	pub fn queue_family(&self, id: u32) -> Option<QueueFamily<'a>> {
+		let this = *self;
+		self.p.queue_family_properties.get(id as usize).map(move |qf| QueueFamily::new(this, id, qf))
 	}
 
 	#[inline]

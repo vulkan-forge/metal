@@ -11,6 +11,7 @@ use ash::version::EntryV1_0;
 
 #[macro_use]
 mod set;
+pub mod ops;
 pub mod sync;
 pub mod instance;
 pub mod device;
@@ -19,6 +20,8 @@ pub mod swapchain;
 pub mod alloc;
 pub mod format;
 pub mod image;
+pub mod pipeline;
+pub mod framebuffer;
 
 #[cfg(feature = "winit")]
 pub mod win;
@@ -33,6 +36,7 @@ pub use device::{
 	DeviceOwned
 };
 pub use format::Format;
+pub use swapchain::Swapchain;
 
 pub struct Entry {
 	handle: ash::Entry,

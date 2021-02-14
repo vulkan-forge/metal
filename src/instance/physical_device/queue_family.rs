@@ -14,12 +14,12 @@ use super::PhysicalDevice;
 pub struct QueueFamily<'a> {
 	physical_device: PhysicalDevice<'a>,
 	index: u32,
-	props: vk::QueueFamilyProperties
+	props: &'a vk::QueueFamilyProperties
 }
 
 impl<'a> QueueFamily<'a> {
 	#[inline]
-	pub(crate) fn new(physical_device: PhysicalDevice<'a>, index: u32, props: vk::QueueFamilyProperties) -> QueueFamily<'a> {
+	pub(crate) fn new(physical_device: PhysicalDevice<'a>, index: u32, props: &'a vk::QueueFamilyProperties) -> QueueFamily<'a> {
 		QueueFamily {
 			physical_device,
 			index,

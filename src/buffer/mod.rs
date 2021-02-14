@@ -9,8 +9,9 @@ use std::{
 use crate::{
 	Device,
 	DeviceOwned,
+	device::Queue,
+	sync,
 	OomError,
-	sync::SharingMode,
 	alloc::{
 		self,
 		Allocator,
@@ -120,28 +121,18 @@ pub struct UnboundBuffer {
 
 impl UnboundBuffer {
 	/// Create a raw, uninitialized buffer of the given size.
-	pub fn new(device: &Arc<Device>, size: u64, usage: Usage, sharing_mode: SharingMode) -> Result<Self, CreationError> {
+	pub fn new<'a, S: IntoIterator<Item=&'a Arc<Queue>>>(device: &Arc<Device>, size: u64, usage: Usage, sharing_queues: S) -> Result<Self, CreationError> {
 		assert!(!usage.is_empty());
 
-		let infos = match sharing_mode {
-			SharingMode::Exclusive => {
-				vk::BufferCreateInfo {
-					size,
-					usage: usage.into_vulkan_flags(),
-					sharing_mode: vk::SharingMode::EXCLUSIVE,
-					..Default::default()
-				}
-			},
-			SharingMode::Concurrent(queues) => {
-				vk::BufferCreateInfo {
-					size,
-					usage: usage.into_vulkan_flags(),
-					sharing_mode: vk::SharingMode::CONCURRENT,
-					queue_family_index_count: queues.len() as u32,
-					p_queue_family_indices: queues.as_ptr(),
-					..Default::default()
-				}
-			}
+		let (sh_mode, sh_count, sh_indices) = sync::vulkan_sharing_mode(sharing_queues);
+
+		let infos = vk::BufferCreateInfo {
+			size,
+			usage: usage.into_vulkan_flags(),
+			sharing_mode: sh_mode,
+			queue_family_index_count: sh_count,
+			p_queue_family_indices: sh_indices,
+			..Default::default()
 		};
 
 		let handle = unsafe {
