@@ -1,54 +1,101 @@
 use ash::vk;
-use std::marker::PhantomData;
 
-#[derive(Clone, Copy, Debug)]
-#[repr(i32)]
-pub enum DynamicState {
-	Viewport = vk::DynamicState::VIEWPORT.as_raw(),
-	Scissor = vk::DynamicState::SCISSOR.as_raw(),
-	LineWidth = vk::DynamicState::LINE_WIDTH.as_raw(),
-	DepthBias = vk::DynamicState::DEPTH_BIAS.as_raw(),
-	BlendConstants = vk::DynamicState::BLEND_CONSTANTS.as_raw(),
-	DepthBounds = vk::DynamicState::DEPTH_BOUNDS.as_raw(),
-	StencilCompareMask = vk::DynamicState::STENCIL_COMPARE_MASK.as_raw(),
-	StencilWriteMask = vk::DynamicState::STENCIL_WRITE_MASK.as_raw(),
-	StencilReference = vk::DynamicState::STENCIL_REFERENCE.as_raw()
+macro_rules! dynamic_states {
+	($($name:ident : $variant:ident ($vulkan:ident)),*) => {
+		#[derive(Clone, Copy, Default, Debug)]
+		pub struct DynamicStates {
+			$(
+				$name: bool
+			),*
+		}
+
+		impl DynamicStates {
+			pub fn new() -> DynamicStates {
+				Self::default()
+			}
+
+			pub fn empty() -> DynamicStates {
+				Self::default()
+			}
+
+			pub fn contains(&self, state: DynamicState) -> bool {
+				match state {
+					$(
+						DynamicState::$variant => self.$name
+					),*
+				}
+			}
+
+			pub fn add(&mut self, state: DynamicState) {
+				match state {
+					$(
+						DynamicState::$variant => self.$name = true
+					),*
+				}
+			}
+
+			pub(crate) fn into_vulkan(self) -> Vec<vk::DynamicState> {
+				let mut vec = Vec::new();
+
+				$(
+					if self.$name {
+						vec.push(vk::DynamicState::$vulkan)
+					}
+				)*
+
+				vec
+			}
+		}
+
+		#[derive(Clone, Copy, Debug)]
+		#[repr(i32)]
+		pub enum DynamicState {
+			$(
+				$variant = vk::DynamicState::$vulkan.as_raw()
+			),*
+		}
+	};
 }
 
-impl DynamicState {
-	pub(crate) fn into_vulkan(self) -> vk::DynamicState {
-		vk::DynamicState::from_raw(self as i32)
+dynamic_states! {
+	viewport: Viewport (VIEWPORT),
+	scissor: Scissor (SCISSOR),
+	line_width: LineWidth (LINE_WIDTH),
+	depth_bias: DepthBias (DEPTH_BIAS),
+	blend_constants: BlendConstants (BLEND_CONSTANTS),
+	depth_bounds: DepthBounds (DEPTH_BOUNDS),
+	stencil_compare_mask: StencilCompareMask (STENCIL_COMPARE_MASK),
+	stencil_write_mask: StencilWriteMask (STENCIL_WRITE_MASK),
+	stencil_reference: StencilReference (STENCIL_REFERENCE)
+}
+
+impl From<DynamicState> for DynamicStates {
+	fn from(i: DynamicState) -> DynamicStates {
+		let mut o = DynamicStates::new();
+		o.add(i);
+		o
 	}
 }
 
-pub unsafe trait DynamicStates {
-	fn for_each<F>(f: F) where F: FnMut(DynamicState) -> ();
+macro_rules! from_tuple {
+	(($($id:ident),*) : $ty:ty) => {
+		impl From<$ty> for DynamicStates {
+			fn from(($($id),*): $ty) -> DynamicStates {
+				let mut o = DynamicStates::new();
+				$(
+					o.add($id);
+				)*
+				o
+			}
+		}
+	};
 }
 
-unsafe impl DynamicStates for () {
-	fn for_each<F>(_f: F) where F: FnMut(DynamicState) -> () {
-		// no dynamic states.
-	}
-}
-
-pub struct Viewport<D: DynamicStates>(PhantomData<D>);
-pub unsafe trait WithViewport {}
-unsafe impl<D: DynamicStates> WithViewport for Viewport<D> {}
-
-unsafe impl<D: DynamicStates> DynamicStates for Viewport<D> {
-	fn for_each<F>(mut f: F) where F: FnMut(DynamicState) -> () {
-		f(DynamicState::Viewport);
-		D::for_each(f)
-	}
-}
-
-pub struct Scissor<D: DynamicStates>(PhantomData<D>);
-pub unsafe trait WithScissor {}
-unsafe impl<D: DynamicStates> WithScissor for Scissor<D> {}
-
-unsafe impl<D: DynamicStates> DynamicStates for Scissor<D> {
-	fn for_each<F>(mut f: F) where F: FnMut(DynamicState) -> () {
-		f(DynamicState::Scissor);
-		D::for_each(f)
-	}
-}
+from_tuple!((a, b): (DynamicState, DynamicState));
+from_tuple!((a, b, c): (DynamicState, DynamicState, DynamicState));
+from_tuple!((a, b, c, d): (DynamicState, DynamicState, DynamicState, DynamicState));
+from_tuple!((a, b, c, d, e): (DynamicState, DynamicState, DynamicState, DynamicState, DynamicState));
+from_tuple!((a, b, c, d, e, f): (DynamicState, DynamicState, DynamicState, DynamicState, DynamicState, DynamicState));
+from_tuple!((a, b, c, d, e, f, g): (DynamicState, DynamicState, DynamicState, DynamicState, DynamicState, DynamicState, DynamicState));
+from_tuple!((a, b, c, d, e, f, g, h): (DynamicState, DynamicState, DynamicState, DynamicState, DynamicState, DynamicState, DynamicState, DynamicState));
+from_tuple!((a, b, c, d, e, f, g, h, i): (DynamicState, DynamicState, DynamicState, DynamicState, DynamicState, DynamicState, DynamicState, DynamicState, DynamicState));

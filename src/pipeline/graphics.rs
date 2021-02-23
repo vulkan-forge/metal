@@ -3,8 +3,7 @@ use ash::{
 	version::DeviceV1_0
 };
 use std::{
-	sync::Arc,
-	marker::PhantomData
+	sync::Arc
 };
 use crate::{
 	OomError,
@@ -12,6 +11,7 @@ use crate::{
 	framebuffer
 };
 use super::{
+	shader,
 	Stages,
 	Layout,
 	VertexInput,
@@ -24,8 +24,7 @@ use super::{
 	DepthTest,
 	StencilTest,
 	ColorBlend,
-	DynamicStates,
-	dynamic_state
+	DynamicStates
 };
 
 #[derive(Debug)]
@@ -47,20 +46,21 @@ impl From<vk::Result> for CreationError {
 	}
 }
 
-pub struct Graphics<S, D, const V: usize> {
+pub struct Graphics {
 	device: Arc<Device>,
 	render_subpass: framebuffer::render_pass::subpass::Reference,
 	handle: vk::Pipeline,
-	stages: S,
-	dynamic_state: PhantomData<D>
+	shaders: Vec<Arc<shader::Module>>,
+	dynamic_states: DynamicStates
 }
 
-impl<S: Stages, D: DynamicStates, const V: usize> Graphics<S, D, V> {
+impl Graphics {
 	/// Creates a new graphics pipeline.
-	pub fn new(
+	pub fn new<S: Stages, D: Into<DynamicStates>, const V: usize>(
 		device: &Arc<Device>,
-		stages: S,
-		vertex_input_and_assembly: Option<(VertexInput, InputAssembly)>,
+		stages: &S,
+		vertex_input: VertexInput,
+		input_assembly: InputAssembly,
 		tesselation: Option<Tesselation>,
 		viewports: [Viewport; V],
 		scissors: [Scissor; V],
@@ -70,18 +70,22 @@ impl<S: Stages, D: DynamicStates, const V: usize> Graphics<S, D, V> {
 		stencil_tests: Option<(StencilTest, StencilTest)>,
 		color_blend: ColorBlend,
 		layout: &Arc<Layout>,
-		render_subpass: framebuffer::render_pass::subpass::Reference
-	) -> Result<Graphics<S, D, V>, CreationError> {
+		render_subpass: framebuffer::render_pass::subpass::Reference,
+		dynamic_states: D
+	) -> Result<Graphics, CreationError> {
+		let mut shaders = Vec::new();
 		let mut vk_stages = Vec::new();
-		stages.for_each(|stage| vk_stages.push(vk::PipelineShaderStageCreateInfo {
-			stage: stage.ty.into_vulkan(),
-			module: stage.entry_point.module().handle(),
-			p_name: stage.entry_point.name().as_ptr(),
-			p_specialization_info: std::ptr::null(),
-			..Default::default()
-		}));
+		stages.for_each(|stage| {
+			vk_stages.push(vk::PipelineShaderStageCreateInfo {
+				stage: stage.ty.into_vulkan(),
+				module: stage.entry_point.module().handle(),
+				p_name: stage.entry_point.name().as_ptr(),
+				p_specialization_info: std::ptr::null(),
+				..Default::default()
+			});
 
-		let (p_vertex_input_state, p_input_assembly_state) = vertex_input_and_assembly.map(|(i, a)| (i.as_vulkan() as *const _, a.as_vulkan() as *const _)).unwrap_or((std::ptr::null(), std::ptr::null()));
+			shaders.push(stage.entry_point.module().clone())
+		});
 
 		let viewport_state = vk::PipelineViewportStateCreateInfo {
 			viewport_count: viewports.len() as u32,
@@ -108,8 +112,8 @@ impl<S: Stages, D: DynamicStates, const V: usize> Graphics<S, D, V> {
 			None
 		};
 
-		let mut vk_dynamic_states = Vec::new();
-		D::for_each(|component| vk_dynamic_states.push(component.into_vulkan()));
+		let dynamic_states = dynamic_states.into();
+		let vk_dynamic_states = dynamic_states.into_vulkan();
 		let dynamic_state = vk::PipelineDynamicStateCreateInfo {
 			dynamic_state_count: vk_dynamic_states.len() as u32,
 			p_dynamic_states: vk_dynamic_states.as_ptr() as *const _,
@@ -121,16 +125,16 @@ impl<S: Stages, D: DynamicStates, const V: usize> Graphics<S, D, V> {
 			stage_count: vk_stages.len() as u32,
 			p_stages: vk_stages.as_ptr(),
 			//
-			p_vertex_input_state,
-			p_input_assembly_state,
+			p_vertex_input_state: vertex_input.as_vulkan(),
+			p_input_assembly_state: input_assembly.as_vulkan(),
 			p_tessellation_state: tesselation.as_ref().map(|t| t.as_vulkan() as *const _).unwrap_or(std::ptr::null()),
 			//
-			p_viewport_state: &viewport_state as *const _,
-			p_rasterization_state: rasterization.as_vulkan() as *const _,
-			p_multisample_state: multisample.as_vulkan() as *const _,
+			p_viewport_state: &viewport_state,
+			p_rasterization_state: rasterization.as_vulkan(),
+			p_multisample_state: multisample.as_vulkan(),
 			p_depth_stencil_state: depth_stencil_state.as_ref().map(|t| t as *const _).unwrap_or(std::ptr::null()),
-			p_color_blend_state: color_blend.as_vulkan() as *const _,
-			p_dynamic_state: &dynamic_state as *const _,
+			p_color_blend_state: color_blend.as_vulkan(),
+			p_dynamic_state: &dynamic_state,
 			//
 			layout: layout.handle(),
 			render_pass: render_subpass.render_pass().handle(),
@@ -157,13 +161,9 @@ impl<S: Stages, D: DynamicStates, const V: usize> Graphics<S, D, V> {
 			device: device.clone(),
 			render_subpass: render_subpass,
 			handle,
-			stages,
-			dynamic_state: PhantomData
+			shaders,
+			dynamic_states
 		})
-	}
-
-	pub fn stages(&self) -> &S {
-		&self.stages
 	}
 
 	pub fn render_subpass(&self) -> &framebuffer::render_pass::subpass::Reference {
@@ -171,19 +171,32 @@ impl<S: Stages, D: DynamicStates, const V: usize> Graphics<S, D, V> {
 	}
 }
 
-impl<S, D: dynamic_state::WithViewport, const V: usize> Graphics<S, D, V> {
-	pub fn set_viewports(&mut self, viewports: [Viewport; V]) {
-		panic!("TODO")
+impl Graphics {
+	pub(crate) fn handle(&self) -> vk::Pipeline {
+		self.handle
 	}
 }
 
-impl<S, D: dynamic_state::WithViewport, const V: usize> Graphics<S, D, V> {
-	pub fn set_scissors(&mut self, scissors: [Scissor; V]) {
-		panic!("TODO")
+unsafe impl crate::Resource for Graphics {
+	fn uid(&self) -> u64 {
+		use vk::Handle;
+		self.handle().as_raw()
 	}
 }
 
-impl<S, D, const V: usize> Drop for Graphics<S, D, V> {
+// impl<S, D: dynamic_state::WithViewport> Graphics<D> {
+// 	pub fn set_viewports(&mut self, viewports: &[Viewport]) {
+// 		panic!("TODO")
+// 	}
+// }
+
+// impl<S, D: dynamic_state::WithViewport> Graphics<D> {
+// 	pub fn set_scissors(&mut self, scissors: &[Scissor]) {
+// 		panic!("TODO")
+// 	}
+// }
+
+impl Drop for Graphics {
 	fn drop(&mut self) {
 		unsafe {
 			self.device.handle().destroy_pipeline(self.handle, None)

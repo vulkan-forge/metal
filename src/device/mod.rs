@@ -8,7 +8,11 @@ use ash::{
 };
 use std::{
 	sync::Arc,
-	fmt
+	fmt,
+	hash::{
+		Hash,
+		Hasher
+	}
 };
 use crate::{
 	OomError,
@@ -222,8 +226,34 @@ impl Device {
 	}
 }
 
+impl PartialEq for Device {
+	fn eq(&self, other: &Device) -> bool {
+		self as *const _ == other as *const _
+	}
+}
+
+impl Eq for Device {}
+
+impl Hash for Device {
+	fn hash<H: Hasher>(&self, h: &mut H) {
+		(self as *const Self).hash(h)
+	}
+}
+
+impl fmt::Debug for Device {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "Device({:?})", self.handle.handle())
+	}
+}
+
 pub trait DeviceOwned {
 	fn device(&self) -> &Arc<Device>;
+}
+
+impl<'a, T: ?Sized + DeviceOwned> DeviceOwned for &'a T {
+	fn device(&self) -> &Arc<Device> {
+		(*self).device()
+	}
 }
 
 pub struct Queues {
@@ -238,9 +268,9 @@ impl DeviceOwned for Queues {
 }
 
 impl Iterator for Queues {
-	type Item = Arc<Queue>;
+	type Item = Queue;
 
-	fn next(&mut self) -> Option<Arc<Queue>> {
+	fn next(&mut self) -> Option<Queue> {
 		match self.index_iter.next() {
 			Some((queue_family_index, queue_index)) => {
 				let handle = unsafe {
@@ -248,7 +278,7 @@ impl Iterator for Queues {
 				};
 
 				let queue = Queue::new(&self.device, handle, queue_family_index, queue_index);
-				Some(Arc::new(queue))
+				Some(queue)
 			},
 			None => None
 		}

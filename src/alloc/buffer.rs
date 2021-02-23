@@ -5,18 +5,18 @@ use std::{
 use crate::{
 	Device,
 	DeviceOwned,
-	buffer::UnboundBuffer
+	buffer
 };
 use super::Allocator;
 
 /// Bound buffer.
 pub struct Buffer<A: Allocator> {
-	inner: UnboundBuffer,
+	inner: buffer::Unbound,
 	slot: A::Slot
 }
 
 impl<A: Allocator> Buffer<A> {
-	pub(crate) fn new(inner: UnboundBuffer, slot: A::Slot) -> Self {
+	pub(crate) fn new(inner: buffer::Unbound, slot: A::Slot) -> Self {
 		Buffer {
 			inner,
 			slot
@@ -35,21 +35,21 @@ impl<A: Allocator> DeviceOwned for Buffer<A> {
 }
 
 impl<A: Allocator> Deref for Buffer<A> {
-	type Target = UnboundBuffer;
+	type Target = buffer::Unbound;
 
-	fn deref(&self) -> &UnboundBuffer {
+	fn deref(&self) -> &buffer::Unbound {
 		&self.inner
 	}
 }
 
 /// Host visible buffer.
 pub struct HostVisibleBuffer<A: Allocator> {
-	inner: UnboundBuffer,
+	inner: buffer::Unbound,
 	slot: A::HostVisibleSlot
 }
 
 impl<A: Allocator> HostVisibleBuffer<A> {
-	pub(crate) fn new(inner: UnboundBuffer, slot: A::HostVisibleSlot) -> Self {
+	pub(crate) fn new(inner: buffer::Unbound, slot: A::HostVisibleSlot) -> Self {
 		HostVisibleBuffer {
 			inner,
 			slot
@@ -68,9 +68,9 @@ impl<A: Allocator> DeviceOwned for HostVisibleBuffer<A> {
 }
 
 impl<A: Allocator> Deref for HostVisibleBuffer<A> {
-	type Target = UnboundBuffer;
+	type Target = buffer::Unbound;
 
-	fn deref(&self) -> &UnboundBuffer {
+	fn deref(&self) -> &buffer::Unbound {
 		&self.inner
 	}
 }

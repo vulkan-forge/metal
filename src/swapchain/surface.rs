@@ -276,15 +276,15 @@ impl<W> Surface<W> {
 	/// `display` must be a valid wayland display handle,
 	/// and `surface` must be a valid wayland surface handle for this display connection.
 	/// Both `display` and `surface` must not be freed before `backend`.
-	pub unsafe fn from_wayland<D, S>(
+	pub unsafe fn from_wayland(
 		instance: &Arc<Instance>,
-		display: *const D,
-		surface: *const S,
+		display: *mut std::ffi::c_void,
+		surface: *mut std::ffi::c_void,
 		backend: W
 	) -> Result<Surface<W>, CreationError> {
 		let infos = vk::WaylandSurfaceCreateInfoKHR {
-			display: display as *mut _,
-			surface: surface as *mut _,
+			display,
+			surface,
 			..Default::default()
 		};
 

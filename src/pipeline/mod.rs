@@ -11,7 +11,7 @@ pub mod multisample;
 pub mod depth_test;
 pub mod stencil_test;
 pub mod color_blend;
-pub mod dynamic_state;
+mod dynamic_state;
 pub mod graphics;
 
 pub use stage::Stages;

@@ -23,21 +23,65 @@ mod memory_requirements;
 
 pub use memory_requirements::MemoryRequirements;
 
-pub trait Buffer {
+pub trait Buffer: crate::Resource {
 	fn handle(&self) -> vk::Buffer;
+
+	/// Checks if the buffer is ready to be used.
+	/// 
+	/// ## Safety
+	/// 
+	/// Once the function has returned `true`,
+	/// it should return `true` forever.
+	fn ready(&self) -> bool;
 }
 
 #[derive(Clone, Copy)]
-pub struct Usage(vk::BufferUsageFlags);
+#[repr(u32)]
+pub enum Usage {
+	TransferSource = vk::BufferUsageFlags::TRANSFER_SRC.as_raw(),
+	TransferDestination = vk::BufferUsageFlags::TRANSFER_DST.as_raw(),
+	UniformTexelBuffer = vk::BufferUsageFlags::UNIFORM_TEXEL_BUFFER.as_raw(),
+	StorageTexelBuffer = vk::BufferUsageFlags::STORAGE_TEXEL_BUFFER.as_raw(),
+	UniformBuffer = vk::BufferUsageFlags::UNIFORM_BUFFER.as_raw(),
+	StorageBuffer = vk::BufferUsageFlags::STORAGE_BUFFER.as_raw(),
+	IndexBuffer = vk::BufferUsageFlags::INDEX_BUFFER.as_raw(),
+	VertexBuffer = vk::BufferUsageFlags::VERTEX_BUFFER.as_raw(),
+	IndirectBuffer = vk::BufferUsageFlags::INDIRECT_BUFFER.as_raw()
+}
 
 impl Usage {
+	pub(crate) fn into_vulkan(self) -> vk::BufferUsageFlags {
+		vk::BufferUsageFlags::from_raw(self as u32)
+	}
+}
+
+impl std::ops::BitOr for Usage {
+	type Output = Usages;
+
+	fn bitor(self, rhs: Self) -> Usages {
+		Usages(self.into_vulkan() | rhs.into_vulkan())
+	}
+}
+
+impl std::ops::BitOr<Usages> for Usage {
+	type Output = Usages;
+
+	fn bitor(self, rhs: Usages) -> Usages {
+		Usages(self.into_vulkan() | rhs.into_vulkan())
+	}
+}
+
+#[derive(Clone, Copy)]
+pub struct Usages(vk::BufferUsageFlags);
+
+impl Usages {
 	#[inline]
 	pub fn is_empty(&self) -> bool {
 		self.0.is_empty()
 	}
 
 	#[inline]
-	pub fn into_vulkan_flags(self) -> vk::BufferUsageFlags {
+	pub fn into_vulkan(self) -> vk::BufferUsageFlags {
 		self.0
 	}
 
@@ -78,6 +122,40 @@ impl Usage {
 	}
 }
 
+impl From<Usage> for Usages {
+	fn from(u: Usage) -> Usages {
+		Usages(u.into_vulkan())
+	}
+}
+
+impl std::ops::BitOr for Usages {
+	type Output = Usages;
+
+	fn bitor(self, rhs: Self) -> Usages {
+		Usages(self.into_vulkan() | rhs.into_vulkan())
+	}
+}
+
+impl std::ops::BitOr<Usage> for Usages {
+	type Output = Usages;
+
+	fn bitor(self, rhs: Usage) -> Usages {
+		Usages(self.into_vulkan() | rhs.into_vulkan())
+	}
+}
+
+impl std::ops::BitOrAssign for Usages {
+	fn bitor_assign(&mut self, rhs: Self) {
+		self.0 |= rhs.into_vulkan()
+	}
+}
+
+impl std::ops::BitOrAssign<Usage> for Usages {
+	fn bitor_assign(&mut self, rhs: Usage) {
+		self.0 |= rhs.into_vulkan()
+	}
+}
+
 #[derive(Debug)]
 pub enum CreationError {
 	OutOfMemory(OomError),
@@ -112,23 +190,25 @@ impl From<vk::Result> for BindError {
 	}
 }
 
-pub struct UnboundBuffer {
+pub struct Unbound {
 	handle: vk::Buffer,
 	device: Arc<Device>,
 	size: u64,
-	usage: Usage
+	usage: Usages
 }
 
-impl UnboundBuffer {
+impl Unbound {
 	/// Create a raw, uninitialized buffer of the given size.
-	pub fn new<'a, S: IntoIterator<Item=&'a Arc<Queue>>>(device: &Arc<Device>, size: u64, usage: Usage, sharing_queues: S) -> Result<Self, CreationError> {
+	pub fn new<'a, U: Into<Usages>, S: Into<sync::SharingQueues>>(device: &Arc<Device>, size: u64, usage: U, sharing_queues: S) -> Result<Self, CreationError> {
+		let usage = usage.into();
 		assert!(!usage.is_empty());
 
-		let (sh_mode, sh_count, sh_indices) = sync::vulkan_sharing_mode(sharing_queues);
+		let sharing_queues = sharing_queues.into();
+		let (sh_mode, sh_count, sh_indices) = sharing_queues.as_vulkan();
 
 		let infos = vk::BufferCreateInfo {
 			size,
-			usage: usage.into_vulkan_flags(),
+			usage: usage.into_vulkan(),
 			sharing_mode: sh_mode,
 			queue_family_index_count: sh_count,
 			p_queue_family_indices: sh_indices,
@@ -139,7 +219,7 @@ impl UnboundBuffer {
 			device.handle.create_buffer(&infos, None)?
 		};
 
-		Ok(UnboundBuffer {
+		Ok(Unbound {
 			handle,
 			device: device.clone(),
 			size,
@@ -197,13 +277,13 @@ impl UnboundBuffer {
 	}
 }
 
-impl DeviceOwned for UnboundBuffer {
+impl DeviceOwned for Unbound {
 	fn device(&self) -> &Arc<Device> {
 		&self.device
 	}
 }
 
-impl Drop for UnboundBuffer {
+impl Drop for Unbound {
 	fn drop(&mut self) {
 		unsafe {
 			self.device.handle.destroy_buffer(self.handle, None);

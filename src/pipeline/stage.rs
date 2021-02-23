@@ -1,4 +1,7 @@
+use ash::vk;
 use super::shader;
+
+pub type Flags = vk::PipelineStageFlags;
 
 /// Shader stages.
 pub unsafe trait Stages: PartialStages {}

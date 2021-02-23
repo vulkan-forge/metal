@@ -1,5 +1,6 @@
 use std::{
 	sync::Arc,
+	rc::Rc,
 	path::Path,
 	io::Read,
 	convert::TryInto
@@ -20,6 +21,7 @@ use magma::{
 	},
 	Swapchain,
 	swapchain::{
+		self,
 		Surface,
 		capabilities::{
 			CompositeAlpha,
@@ -29,9 +31,13 @@ use magma::{
 		capabilities::ColorSpace
 	},
 	image,
+	Image,
 	pipeline::{
 		self,
 		shader,
+		VertexInput,
+		input_assembly,
+		InputAssembly,
 		Viewport,
 		Scissor,
 		ColorBlend,
@@ -39,16 +45,31 @@ use magma::{
 			self,
 			BlendFactor
 		},
-		Layout
+		Layout,
+		DynamicStates
 	},
 	win::{
 		self,
 		WindowBuilderExt
 	},
 	framebuffer,
+	Framebuffer,
+	format::ClearValue,
 	Format,
+	command,
+	sync::{
+		Task,
+		semaphore,
+		fence,
+		future::{
+			SignalSemaphore,
+			SignalSemaphores,
+			SignalFence
+		}
+	},
 	ops
 };
+
 use winit::{
 	event_loop::EventLoop,
 	event::{
@@ -82,8 +103,12 @@ pub fn main() {
 		}
 	};
 
-	let physical_device = Arc::new(instance.physical_devices().next().unwrap());
-	println!("device: {}", physical_device.name());
+	for physical_device in instance.physical_devices() {
+		println!("device: {}", physical_device.name());
+	}
+
+	let physical_device = Arc::new(instance.physical_devices().last().unwrap());
+	println!("choosen device: {}", physical_device.name());
 
 	let event_loop = EventLoop::new();
 	let surface = Arc::new(WindowBuilder::new().build_vk_surface(&event_loop, &instance).unwrap());
@@ -97,23 +122,6 @@ pub fn main() {
 	let surface_capabilities = surface.capabilities(device.physical_device()).unwrap();
 	let (color_format, color_space) = choose_format(&surface_capabilities).expect("No appropriate format found");
 
-	let swapchain = Swapchain::new(
-		&device,
-		&surface,
-		surface_capabilities.min_image_count,
-		color_format,
-		color_space,
-		Some(dimensions), // TODO check if the dimensions are supported by the swapchain.
-		1,
-		image::Usage::color_attachment(),
-		Some(&queue),
-		surface_capabilities.current_transform,
-		CompositeAlpha::Opaque, // ignore alpha component.
-		PresentMode::Fifo, // guaranteed to exist.
-		true,
-		None
-	).unwrap();
-
 	// Load the shader modules.
 	let vertex_shader = unsafe { load_shader_module(&device, "examples/shaders/triangle.vert.spv") };
 	let fragment_shader = unsafe { load_shader_module(&device, "examples/shaders/triangle.frag.spv") };
@@ -126,14 +134,16 @@ pub fn main() {
 		)
 	};
 
-	let render_pass = create_render_pass(&device, swapchain.format());
+	let render_pass = create_render_pass(&device, color_format);
 
 	let layout = Arc::new(Layout::new(&device, &[], &[]).expect("unable to create pipeline layout"));
-
-	let pipeline = pipeline::Graphics::<_, (), 1>::new(
+	
+	let vertex_input = VertexInput::new();
+	let pipeline = Arc::new(pipeline::Graphics::new::<_, _, 1>(
 		&device,
-		stages,
-		None, // no vertex input/assembly
+		&stages,
+		vertex_input,
+		InputAssembly::new(input_assembly::Topology::TriangleList, false),
 		None, // no tesselation
 		[Viewport::new(0.0, 0.0, dimensions.0 as f32, dimensions.1 as f32, 0.0, 1.0)],
 		[Scissor::new(0, 0, dimensions.0, dimensions.1)],
@@ -161,11 +171,34 @@ pub fn main() {
 			color_blend::ColorComponents::rgba()
 		)),
 		&layout,
-		render_pass.subpass(0).unwrap()
-	).expect("unable to create pipeline");
+		render_pass.subpass(0).unwrap(),
+		DynamicStates::empty()
+	).expect("unable to create pipeline"));
+
+	let mut renderer = None;
+	let mut render_queue = Some(queue);
 
 	event_loop.run(move |event, _, _| {
-		// TODO
+		// println!("event: {:?}", event);
+		match event {
+			winit::event::Event::RedrawRequested(_) => {
+				if renderer.is_none() {
+					renderer = Some(Renderer::new(
+						&device,
+						&surface,
+						color_format,
+						color_space,
+						dimensions,
+						render_queue.take().unwrap(),
+						&render_pass,
+						&pipeline
+					));
+				}
+
+				renderer.as_mut().unwrap().render()
+			},
+			_ => ()
+		}
 	});
 }
 
@@ -241,4 +274,116 @@ fn create_render_pass(device: &Arc<Device>, format: Format) -> Arc<framebuffer::
 	render_pass.add(subpass);
 
 	Arc::new(render_pass.build(device).expect("unable to build render pass"))
+}
+
+pub struct Renderer<W> {
+	swapchain: Swapchain<W>,
+	command_buffers: Vec<command::Buffer<'static>>,
+	queue: Queue,
+	image_available_semaphore: semaphore::Raw,
+	render_finished_semaphore: semaphore::Raw,
+	render_finished_fence: fence::Raw
+}
+
+impl<W: 'static> Renderer<W> {
+	pub fn new(
+		device: &Arc<Device>,
+		surface: &Arc<Surface<W>>,
+		color_format: Format,
+		color_space: ColorSpace,
+		dimensions: (u32, u32),
+		queue: Queue,
+		render_pass: &Arc<framebuffer::RenderPass>,
+		pipeline: &Arc<pipeline::Graphics>
+	) -> Self {
+		let surface_capabilities = surface.capabilities(device.physical_device()).unwrap();
+
+		let (swapchain, swapchain_images) = Swapchain::new(
+			device,
+			surface,
+			surface_capabilities.min_image_count,
+			color_format,
+			color_space,
+			Some(dimensions), // TODO check if the dimensions are supported by the swapchain.
+			1,
+			image::Usage::color_attachment(),
+			Some(&queue),
+			surface_capabilities.current_transform,
+			CompositeAlpha::Opaque, // ignore alpha component.
+			PresentMode::Fifo, // guaranteed to exist.
+			true,
+			None
+		).expect("unable to create swapchain");
+	
+		let framebuffers: Vec<_> = swapchain_images.into_iter().map(|i| {
+			let view = i.into_view(
+				image::view::Type::D2,
+				color_format,
+				image::view::ComponentMapping::default(), // identity
+				image::view::SubresourceRange {
+					aspects: image::view::Aspects::color(),
+					base_mip_level: 0,
+					level_count: 1,
+					base_array_layer: 0,
+					layer_count: 1
+				}
+			).expect("unable to create swapchain image view");
+	
+			Arc::new(Framebuffer::new(
+				&device,
+				&render_pass,
+				vec![Arc::new(view)],
+				dimensions,
+				1
+			).expect("unable to create framebuffer"))
+		}).collect();
+	
+		let pool = Rc::new(command::Pool::new(&device, queue.family()).expect("unable to create command pool"));
+		let mut command_buffers = pool.allocate(framebuffers.len() as u32).expect("unable to allocate command buffers");
+		for (i, buffer) in command_buffers.iter_mut().enumerate() {
+			buffer.record(|mut b| {
+				b.begin_render_pass(
+					&render_pass,
+					&framebuffers[i],
+					(0, 0, dimensions.0, dimensions.1),
+					&[ClearValue::f32color(0.0, 0.0, 0.0, 1.0)]
+				);
+				b.bind_graphics_pipeline(&pipeline);
+				b.draw(3, 1, 0, 0);
+				b.end_render_pass();
+			}).expect("unable to record command buffer")
+		}
+	
+		let image_available_semaphore = semaphore::Raw::new(&device).expect("unable to create semaphore");
+		let render_finished_semaphore = semaphore::Raw::new(&device).expect("unable to create semaphore");
+		let render_finished_fence = fence::Raw::new(&device).expect("unable to create fence");
+
+		Renderer {
+			swapchain,
+			command_buffers,
+			queue,
+			image_available_semaphore,
+			render_finished_semaphore,
+			render_finished_fence
+		}
+	}
+
+	pub fn render(&mut self) {
+		let ((next_index, _), image_acquired) = self.swapchain
+			.acquire_next_image(None)
+			.then_signal_semaphore(&self.image_available_semaphore)
+			.expect("unable to acquire next image");
+
+		let ((), render_finished) = image_acquired
+			.and_then_pipeline_stages_of(self.queue.submit(&self.command_buffers[next_index as usize]), pipeline::stage::Flags::TOP_OF_PIPE)
+			.then_signal_semaphore_and_fence(&self.render_finished_semaphore, &self.render_finished_fence)
+			.expect("unable to render");
+
+		let (_, render_finished) = render_finished
+			.and_then(self.queue.present(&self.swapchain, next_index))
+			.in_parallel()
+			.expect("unable to present");
+
+		render_finished.wait(None).expect("unable to wait for the render");
+	}
 }

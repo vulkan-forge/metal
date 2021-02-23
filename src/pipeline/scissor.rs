@@ -39,3 +39,9 @@ impl Scissor {
 		self.0.extent.height
 	}
 }
+
+impl Default for Scissor {
+	fn default() -> Self {
+		Self::new(0, 0, 0, 0)
+	}
+}

@@ -174,6 +174,13 @@ impl RenderPass {
 	}
 }
 
+unsafe impl crate::Resource for RenderPass {
+	fn uid(&self) -> u64 {
+		use vk::Handle;
+		self.handle().as_raw()
+	}
+}
+
 impl Drop for RenderPass {
 	fn drop(&mut self) {
 		unsafe {

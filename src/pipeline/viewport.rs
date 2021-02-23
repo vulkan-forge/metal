@@ -46,3 +46,9 @@ impl Viewport {
 		self.0.max_depth
 	}
 }
+
+impl Default for Viewport {
+	fn default() -> Self {
+		Self::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+	}
+}

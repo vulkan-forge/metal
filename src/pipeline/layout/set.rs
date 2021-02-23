@@ -60,4 +60,5 @@ impl Drop for Set {
 	}
 }
 
-pub struct Binding(vk::DescriptorSetLayoutBinding); // This MUST be homomorphic to `vk::DescriptorSetLayoutBinding`.
+#[repr(transparent)]
+pub struct Binding(vk::DescriptorSetLayoutBinding);

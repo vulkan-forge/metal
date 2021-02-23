@@ -4,6 +4,10 @@ use ash::{
 };
 use crate::instance::PhysicalDevice;
 
+mod clear_value;
+
+pub use clear_value::ClearValue;
+
 /// The properties of an image format that are supported by a physical device.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct FormatProperties {

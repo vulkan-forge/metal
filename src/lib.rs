@@ -1,3 +1,4 @@
+#![feature(generic_associated_types)]
 #[macro_use]
 extern crate log;
 
@@ -7,10 +8,14 @@ use std::{
 	fmt
 };
 use once_cell::sync::OnceCell;
-use ash::version::EntryV1_0;
+use ash::{
+	vk,
+	version::EntryV1_0
+};
 
 #[macro_use]
 mod set;
+pub mod resource;
 pub mod ops;
 pub mod sync;
 pub mod instance;
@@ -22,6 +27,7 @@ pub mod format;
 pub mod image;
 pub mod pipeline;
 pub mod framebuffer;
+pub mod command;
 
 #[cfg(feature = "winit")]
 pub mod win;
@@ -30,13 +36,17 @@ use instance::{
 	layer::InstanceValidationLayer
 };
 
+pub use resource::Resource;
 pub use instance::Instance;
 pub use device::{
 	Device,
 	DeviceOwned
 };
+pub use buffer::Buffer;
 pub use format::Format;
 pub use swapchain::Swapchain;
+pub use image::Image;
+pub use framebuffer::Framebuffer;
 
 pub struct Entry {
 	handle: ash::Entry,
@@ -93,6 +103,16 @@ impl fmt::Display for OomError {
 		match self {
 			OomError::Host => write!(f, "host is out of memory"),
 			OomError::Device => write!(f, "device is out of memory")
+		}
+	}
+}
+
+impl From<vk::Result> for OomError {
+	fn from(r: vk::Result) -> OomError {
+		match r {
+			vk::Result::ERROR_OUT_OF_HOST_MEMORY => OomError::Host,
+			vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => OomError::Device,
+			_ => unreachable!()
 		}
 	}
 }

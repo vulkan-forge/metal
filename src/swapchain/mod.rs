@@ -1,11 +1,19 @@
 use ash::vk;
-use std::sync::Arc;
+use std::{
+	rc::Rc,
+	sync::Arc
+};
 use crate::{
 	OomError,
 	Device,
+	DeviceOwned,
 	device,
 	Format,
-	image::Usage
+	image::Usage,
+	sync::{
+		self,
+		task,
+	}
 };
 
 pub mod surface;
@@ -21,14 +29,6 @@ use capabilities::{
 	PresentMode
 };
 pub use image::Image;
-
-pub struct Swapchain<W> {
-	device: Arc<Device>,
-	surface: Arc<Surface<W>>,
-	handle: vk::SwapchainKHR,
-	format: Format,
-	color_space: ColorSpace
-}
 
 #[derive(Debug)]
 pub enum CreationError {
@@ -69,29 +69,53 @@ impl From<vk::Result> for CreationError {
 }
 
 #[derive(Debug)]
-pub enum ImagesError {
+pub enum AcquireError {
+	Timeout,
+	NotReady,
 	OomError(OomError),
-	MissingDeviceExtension(device::MissingExtensionError)
+	DeviceLost,
+	SurfaceLost,
+	FullScreenExclusiveModeLost,
+	MissingDeviceExtension(device::MissingExtensionError),
+	OutOfDate
 }
 
-impl From<device::MissingExtensionError> for ImagesError {
+impl From<device::MissingExtensionError> for AcquireError {
 	fn from(e: device::MissingExtensionError) -> Self {
-		ImagesError::MissingDeviceExtension(e)
+		AcquireError::MissingDeviceExtension(e)
 	}
 }
 
-impl From<vk::Result> for ImagesError {
+impl From<vk::Result> for AcquireError {
 	fn from(e: vk::Result) -> Self {
 		match e {
-			vk::Result::ERROR_OUT_OF_HOST_MEMORY => ImagesError::OomError(OomError::Host),
-			vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => ImagesError::OomError(OomError::Device),
+			vk::Result::TIMEOUT => AcquireError::Timeout,
+			vk::Result::NOT_READY => AcquireError::NotReady,
+			vk::Result::ERROR_OUT_OF_HOST_MEMORY => AcquireError::OomError(OomError::Host),
+			vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => AcquireError::OomError(OomError::Device),
+			vk::Result::ERROR_DEVICE_LOST => AcquireError::DeviceLost,
+			vk::Result::ERROR_OUT_OF_DATE_KHR => AcquireError::OutOfDate,
+			vk::Result::ERROR_SURFACE_LOST_KHR => AcquireError::SurfaceLost,
+			vk::Result::ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT => AcquireError::FullScreenExclusiveModeLost,
 			_ => unreachable!()
 		}
 	}
 }
 
+pub(crate) struct Inner<W> {
+	device: Arc<Device>,
+	surface: Arc<Surface<W>>,
+	format: Format,
+	color_space: ColorSpace,
+	handle: vk::SwapchainKHR
+}
+
+pub struct Swapchain<W> {
+	inner: Rc<Inner<W>>,
+}
+
 impl<W> Swapchain<W> {
-	pub fn new<'a, S: IntoIterator<Item=&'a Arc<device::Queue>>>(
+	pub fn new<'a, S: IntoIterator<Item=&'a device::Queue>>(
 		device: &Arc<Device>,
 		surface: &Arc<Surface<W>>,
 		num_images: u32,
@@ -106,7 +130,7 @@ impl<W> Swapchain<W> {
 		mode: PresentMode,
 		clipped: bool,
 		old_swapchain: Option<&Swapchain<W>>
-	) -> Result<Swapchain<W>, CreationError> {
+	) -> Result<(Swapchain<W>, Vec<Image<W>>), CreationError> {
 		let capabilities = surface.capabilities(device.physical_device())?;
 
 		let dimensions = if let Some(dimensions) = dimensions {
@@ -170,43 +194,128 @@ impl<W> Swapchain<W> {
 			ext_khr_swapchain.create_swapchain(&infos, None)?
 		};
 
-		let swapchain = Swapchain {
+		let inner = Rc::new(Inner {
 			device: device.clone(),
 			surface: surface.clone(),
 			handle,
 			format,
 			color_space
+		});
+
+		let images = unsafe {
+			ext_khr_swapchain.get_swapchain_images(handle)?
+		}.into_iter().map(|h| Image::new(&inner, h)).collect();
+
+		let swapchain = Swapchain {
+			inner
 		};
 
-		Ok(swapchain)
+		Ok((swapchain, images))
+	}
+
+	pub fn surface(&self) -> &Arc<Surface<W>> {
+		&self.inner.surface
 	}
 
 	#[inline]
 	pub(crate) fn handle(&self) -> vk::SwapchainKHR {
-		self.handle
-	}
-
-	pub fn images(self: &Arc<Self>) -> Result<Vec<Image<W>>, ImagesError> {
-		let ext_khr_swapchain = self.device.ext_khr_swapchain()?;
-
-		let image_handles = unsafe {
-			ext_khr_swapchain.get_swapchain_images(self.handle)?
-		};
-
-		let images: Vec<Image<W>> = image_handles.into_iter().map(|handle| {
-			Image::new(self.clone(), handle)
-		}).collect();
-
-		Ok(images)
+		self.inner.handle
 	}
 
 	#[inline]
 	pub fn format(&self) -> Format {
-		self.format
+		self.inner.format
 	}
 
 	#[inline]
 	pub fn color_space(&self) -> ColorSpace {
-		self.color_space
+		self.inner.color_space
+	}
+
+	pub fn acquire_next_image(&mut self, timeout: Option<u64>) -> Acquire<W> {
+		Acquire {
+			swapchain: self,
+			timeout
+		}
 	}
 }
+
+impl<W> DeviceOwned for Swapchain<W> {
+	fn device(&self) -> &Arc<Device> {
+		&self.inner.device
+	}
+}
+
+pub struct Acquire<'a, W> {
+	swapchain: &'a mut Swapchain<W>,
+	timeout: Option<u64>
+}
+
+unsafe impl<'a, W> task::Task for Acquire<'a, W> {
+	type Output = (u32, bool);
+	type Error = AcquireError;
+	type Past = ();
+
+	fn execute(
+		self,
+		signal_semaphore: Option<&[vk::Semaphore]>,
+		signal_fence: Option<vk::Fence>,
+	) -> Result<((u32, bool), ()), AcquireError> {
+		let ext_khr_swapchain = self.swapchain.inner.device.ext_khr_swapchain()?;
+		let output = unsafe {
+				ext_khr_swapchain.acquire_next_image(
+				self.swapchain.inner.handle,
+				self.timeout.unwrap_or(u64::MAX),
+				signal_semaphore.map(|s| *s.first().unwrap()).unwrap_or(vk::Semaphore::null()),
+				signal_fence.unwrap_or(vk::Fence::null())
+			)?
+		};
+
+		Ok((output, ()))
+	}
+}
+
+impl<'a, W> task::SignalSemaphore for Acquire<'a, W> {}
+impl<'a, W> task::SignalFence for Acquire<'a, W> {}
+
+// pub struct Images<W> {
+// 	inner: Rc<Inner<W>>,
+// 	images: &'a [vk::Image]
+// }
+
+// impl<'a, W> Images<'a, W> {
+// 	pub fn get(&self, i: u32) -> Option<Image<'a, W>> {
+// 		match self.images.get(i as usize) {
+// 			Some(h) => Some(Image::new(self.swapchain, *h)),
+// 			None => None
+// 		}
+// 	}
+
+// 	pub fn iter(&self) -> ImagesIter<'a, W> {
+// 		ImagesIter {
+// 			swapchain: self.swapchain,
+// 			inner: self.images.iter()
+// 		}
+// 	}
+// }
+
+// pub struct ImagesIter<'a, W> {
+// 	swapchain: &'a Swapchain<W>,
+// 	inner: std::slice::Iter<'a, vk::Image>
+// }
+
+// impl<'a, W> Iterator for ImagesIter<'a, W> {
+// 	type Item = Image<'a, W>;
+
+// 	fn next(&mut self) -> Option<Image<'a, W>> {
+// 		self.inner.next().map(|h| Image::new(self.swapchain, *h))
+// 	}
+// }
+
+// pub struct ImageStream<'a, W> {
+// 	swapchain: &'a Swapchain<W>
+// }
+
+// impl ImageStream<'a, W> {
+	
+// }
