@@ -1,5 +1,5 @@
 use ash::vk;
-use crate::buffer;
+use crate::mem::MemoryRequirements;
 use super::PhysicalDevice;
 
 pub struct MemoryType<'a> {
@@ -24,7 +24,7 @@ impl<'a> MemoryType<'a> {
 	}
 
 	#[inline]
-	pub fn satisfies(&self, reqs: &buffer::MemoryRequirements) -> bool {
+	pub fn satisfies(&self, reqs: &MemoryRequirements) -> bool {
 		reqs.contains_memory_type_index(self.index)
 	}
 

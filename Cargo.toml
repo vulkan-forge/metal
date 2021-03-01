@@ -10,8 +10,9 @@ win = [ "winit" ]
 
 [dependencies]
 ash = "^0.31"
-cc-traits = { path = "../../traits/cc-traits" }
+cc-traits = "^0.4"
 once_cell = "*"
+maybe-owned = "^0.3"
 log = "*"
 
 winit = { version = "^0.24", optional = true }

@@ -20,11 +20,11 @@ pub trait Semaphore {
 	fn handle(&self) -> &vk::Semaphore;
 
 	/// Signal this semaphore after executing the given task.
-	fn signal<T: task::SignalSemaphore>(self, task: T) -> Result<(T::Output, Future<T::Past, Self>), T::Error> where Self: Sized {
-		let (output, past) = task.execute(Some(&[*self.handle()]), None)?;
+	fn signal<T: task::SignalSemaphore>(self, task: T) -> Result<(T::Output, Future<T::Payload, Self>), T::Error> where Self: Sized {
+		let (output, payload) = task.execute(Some(&[*self.handle()]), None)?;
 
 		let future = Future {
-			past,
+			payload,
 			semaphore: self
 		};
 
@@ -32,14 +32,15 @@ pub trait Semaphore {
 	}
 }
 
+#[must_use]
 pub struct Future<P, S> {
-	past: P,
+	payload: P,
 	semaphore: S,
 }
 
 impl<P, S> Future<P, S> {
-	pub fn past(&self) -> &P {
-		&self.past
+	pub fn payload(&self) -> &P {
+		&self.payload
 	}
 }
 

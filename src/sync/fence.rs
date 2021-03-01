@@ -17,6 +17,8 @@ use super::{
 	Semaphore
 };
 
+pub type VulkanFence = vk::Fence;
+
 #[derive(Debug)]
 pub enum WaitError {
 	OutOfMemory(OomError),
@@ -47,14 +49,14 @@ impl From<vk::Result> for DeviceLost {
 }
 
 pub trait Fence: DeviceOwned {
-	fn handle(&self) -> &vk::Fence;
+	fn handle(&self) -> &VulkanFence;
 
 	/// Signal this fence after executing the given task.
-	fn signal<T: task::SignalFence>(self, task: T) -> Result<(T::Output, Future<T::Past, Self>), T::Error> where Self: Sized {
-		let (output, past) = task.execute(None, Some(*self.handle()))?;
+	fn signal<T: task::SignalFence>(self, task: T) -> Result<(T::Output, Future<T::Payload, Self>), T::Error> where Self: Sized {
+		let (output, payload) = task.execute(None, Some(*self.handle()))?;
 
 		let future = Future {
-			past,
+			payload,
 			fence: self
 		};
 
@@ -62,11 +64,11 @@ pub trait Fence: DeviceOwned {
 	}
 
 	/// Signal this fence after executing the given task.
-	fn signal_with_semaphore<S: Semaphore, T: task::SignalFence + task::SignalSemaphore>(self, semaphore: S, task: T) -> Result<(T::Output, FutureWithSemaphore<T::Past, Self, S>), T::Error> where Self: Sized {
-		let (output, past) = task.execute(Some(&[*semaphore.handle()]), Some(*self.handle()))?;
+	fn signal_with_semaphore<S: Semaphore, T: task::SignalFence + task::SignalSemaphore>(self, semaphore: S, task: T) -> Result<(T::Output, FutureWithSemaphore<T::Payload, Self, S>), T::Error> where Self: Sized {
+		let (output, payload) = task.execute(Some(&[*semaphore.handle()]), Some(*self.handle()))?;
 
 		let future = FutureWithSemaphore {
-			past,
+			payload,
 			fence: self,
 			semaphore
 		};
@@ -99,19 +101,20 @@ pub trait Fence: DeviceOwned {
 	}
 }
 
+#[must_use]
 pub struct Future<P, F> {
-	past: P,
+	payload: P,
 	fence: F,
 }
 
 impl<P, F> Future<P, F> {
 	pub fn past(&self) -> &P {
-		&self.past
+		&self.payload
 	}
 }
 
 unsafe impl<P, F: Fence> future::Future for Future<P, F> {
-	fn signal_fence(&self) -> Option<&vk::Fence> {
+	fn signal_fence(&self) -> Option<&VulkanFence> {
 		Some(self.fence.handle())
 	}
 }
@@ -120,17 +123,22 @@ impl<P, F: Fence> future::SignalFence for Future<P, F> {
 	fn wait(self, timeout: Option<u64>) -> Result<(), WaitError> {
 		self.fence.wait(timeout)
 	}
+
+	fn is_signaled(&self) -> Result<bool, DeviceLost> {
+		self.fence.is_signaled()
+	}
 }
 
+#[must_use]
 pub struct FutureWithSemaphore<P, F, S> {
-	past: P,
+	payload: P,
 	fence: F,
 	semaphore: S
 }
 
 impl<P, F, S> FutureWithSemaphore<P, F, S> {
-	pub fn past(&self) -> &P {
-		&self.past
+	pub fn payload(&self) -> &P {
+		&self.payload
 	}
 }
 
@@ -139,7 +147,7 @@ unsafe impl<P, F: Fence, S: Semaphore> future::Future for FutureWithSemaphore<P,
 		Some(self.semaphore.handle())
 	}
 
-	fn signal_fence(&self) -> Option<&vk::Fence> {
+	fn signal_fence(&self) -> Option<&VulkanFence> {
 		Some(self.fence.handle())
 	}
 }
@@ -148,6 +156,10 @@ impl<P, F: Fence, S: Semaphore> future::SignalSemaphore for FutureWithSemaphore<
 impl<P, F: Fence, S: Semaphore> future::SignalFence for FutureWithSemaphore<P, F, S> {
 	fn wait(self, timeout: Option<u64>) -> Result<(), WaitError> {
 		self.fence.wait(timeout)
+	}
+
+	fn is_signaled(&self) -> Result<bool, DeviceLost> {
+		self.fence.is_signaled()
 	}
 }
 
@@ -169,7 +181,7 @@ impl From<vk::Result> for CreationError {
 #[derive(PartialEq, Eq, Hash)]
 pub struct Raw {
 	device: Arc<Device>,
-	handle: vk::Fence
+	handle: VulkanFence
 }
 
 impl Raw {
@@ -198,7 +210,7 @@ impl Drop for Raw {
 }
 
 impl<T: Borrow<Raw> + DeviceOwned> Fence for T {
-	fn handle(&self) -> &vk::Fence {
+	fn handle(&self) -> &VulkanFence {
 		&self.borrow().handle
 	}
 }

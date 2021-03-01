@@ -160,6 +160,16 @@ impl Instance {
 		})
 	}
 
+	/// Get the physical device of the given index.
+	#[inline]
+	pub fn physical_device<'a>(self: &'a Arc<Self>, index: u32) -> Option<PhysicalDevice<'a>> {
+		if (index as usize) < self.physical_devices_info.len() {
+			Some(PhysicalDevice::new(self, index))
+		} else {
+			None
+		}
+	}
+
 	#[inline]
 	pub fn loaded_extensions(&self) -> &Extensions {
 		&self.loaded_extensions

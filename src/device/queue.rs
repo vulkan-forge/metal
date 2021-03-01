@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use maybe_owned::MaybeOwned;
 use ash::{
 	vk,
 	version::DeviceV1_0
@@ -97,12 +98,12 @@ impl Queue {
 		self.device.physical_device().queue_family(self.queue_family_index).unwrap()
 	}
 
-	pub fn submit<'a, 'r>(&'a mut self, buffer: &'a command::Buffer<'r>) -> Submit<'a, 'r> {
+	pub fn submit<'a, 'b, 'r: 'b, B: 'a + command::Buffer, R>(&'a mut self, buffer: R) -> Submit<'a, 'b, 'r, B> where R: Into<MaybeOwned<'b, command::buffer::Recorded<'r, B>>> {
 		// TODO check inner buffer queue access.
 
 		Submit {
 			queue: self,
-			buffer
+			buffer: buffer.into()
 		}
 	}
 
@@ -121,14 +122,15 @@ impl DeviceOwned for Queue {
 	}
 }
 
-pub struct Submit<'a, 'r> {
+pub struct Submit<'a, 'b, 'r, B: command::Buffer> {
 	queue: &'a mut Queue,
-	buffer: &'a command::Buffer<'r>
+	buffer: MaybeOwned<'b, command::buffer::Recorded<'r, B>>
 }
 
-unsafe impl<'a, 'r> task::WaitPipelineStages for Submit<'a, 'r> {
+unsafe impl<'a, 'b, 'r, B: command::Buffer> task::WaitPipelineStages for Submit<'a, 'b, 'r, B> {
 	type Output = ();
 	type Error = SubmitError;
+	type Payload = MaybeOwned<'b, command::buffer::Recorded<'r, B>>;
 
 	fn execute(
 		self,
@@ -136,7 +138,7 @@ unsafe impl<'a, 'r> task::WaitPipelineStages for Submit<'a, 'r> {
 		wait_pipeline_stage_mask: Option<&[pipeline::stage::Flags]>,
 		signal_semaphores: Option<&[vk::Semaphore]>,
 		signal_fence: Option<vk::Fence>,
-	) -> Result<(), SubmitError> {
+	) -> Result<((), Self::Payload), SubmitError> {
 		let infos = vk::SubmitInfo {
 			wait_semaphore_count: wait_semaphores.map(|s| s.len() as u32).unwrap_or(0),
 			p_wait_semaphores: wait_semaphores.map(|s| s.as_ptr()).unwrap_or(std::ptr::null()),
@@ -154,12 +156,12 @@ unsafe impl<'a, 'r> task::WaitPipelineStages for Submit<'a, 'r> {
 			self.queue.device.handle().queue_submit(self.queue.handle, &[infos], signal_fence.unwrap_or(vk::Fence::null()))?;
 		}
 
-		Ok(())
+		Ok(((), self.buffer))
 	}
 }
 
-impl<'a, 'r> task::SignalSemaphore for Submit<'a, 'r> {}
-impl<'a, 'r> task::SignalFence for Submit<'a, 'r> {}
+impl<'a, 'b, 'r, B: command::Buffer> task::SignalSemaphore for Submit<'a, 'b, 'r, B> {}
+impl<'a, 'b, 'r, B: command::Buffer> task::SignalFence for Submit<'a, 'b, 'r, B> {}
 
 pub struct Present<'a, W> {
 	queue: &'a mut Queue,
@@ -170,13 +172,14 @@ pub struct Present<'a, W> {
 unsafe impl<'a, W> task::Wait for Present<'a, W> {
 	type Output = bool;
 	type Error = PresentError;
+	type Payload = ();
 
 	fn execute(
 		self,
 		wait_semaphores: Option<&[vk::Semaphore]>,
 		_signal_semaphores: Option<&[vk::Semaphore]>,
 		_signal_fence: Option<vk::Fence>,
-	) -> Result<bool, PresentError> {
+	) -> Result<(bool, ()), PresentError> {
 		let ext_khr_swapchain = self.queue.device.ext_khr_swapchain()?;
 
 		let mut result = vk::Result::SUCCESS;
@@ -199,7 +202,7 @@ unsafe impl<'a, W> task::Wait for Present<'a, W> {
 			return Err(result.into())
 		}
 
-		Ok(suboptimal)
+		Ok((suboptimal, ()))
 	}
 }
 

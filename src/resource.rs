@@ -16,7 +16,14 @@ pub unsafe trait Resource {
 	fn uid(&self) -> u64;
 }
 
-pub struct Ref<'a>(Arc<dyn 'a + Resource>);
+unsafe impl<B: std::ops::Deref> Resource for B where B::Target: Resource {
+	#[inline]
+	fn uid(&self) -> u64 {
+		self.deref().uid()
+	}
+}
+
+pub struct Ref<'a>(Box<dyn 'a + Resource>);
 
 impl<'a> Ref<'a> {
 	#[inline]
@@ -41,8 +48,8 @@ impl<'a> Hash for Ref<'a> {
 	}
 }
 
-impl<'a, R: 'a + Resource> From<Arc<R>> for Ref<'a> {
-	fn from(r: Arc<R>) -> Ref<'a> {
-		Ref(r)
+impl<'a, R: 'a + Resource> From<R> for Ref<'a> {
+	fn from(r: R) -> Self {
+		Self(Box::new(r))
 	}
 }

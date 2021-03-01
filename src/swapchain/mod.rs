@@ -254,7 +254,7 @@ pub struct Acquire<'a, W> {
 unsafe impl<'a, W> task::Task for Acquire<'a, W> {
 	type Output = (u32, bool);
 	type Error = AcquireError;
-	type Past = ();
+	type Payload = ();
 
 	fn execute(
 		self,

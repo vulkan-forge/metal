@@ -61,6 +61,8 @@ pub trait SignalFence: Futures {
 	}
 
 	fn wait(self, timeout: Option<u64>) -> Result<(), fence::WaitError>;
+
+	fn is_signaled(&self) -> Result<bool, fence::DeviceLost>;
 }
 
 pub trait SignalSemaphores {

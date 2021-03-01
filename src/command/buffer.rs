@@ -5,7 +5,6 @@ use ash::{
 use std::{
 	sync::Arc,
 	rc::Rc,
-	any::Any,
 	collections::HashSet
 };
 use crate::{
@@ -18,6 +17,7 @@ use crate::{
 	Image,
 	pipeline,
 	format,
+	mem
 };
 use super::Pool;
 
@@ -53,26 +53,13 @@ impl From<vk::Result> for RecordError {
 
 pub type BufferCopy = vk::BufferCopy;
 
-pub struct Buffer<'a> {
-	pool: Rc<Pool>,
-	resources: HashSet<resource::Ref<'a>>,
-	handle: vk::CommandBuffer
-}
+pub type VulkanBuffer = vk::CommandBuffer;
 
-impl<'a> Buffer<'a> {
-	pub(crate) fn new(pool: &Rc<Pool>, handle: vk::CommandBuffer) -> Self {
-		Buffer {
-			pool: pool.clone(),
-			resources: HashSet::new(),
-			handle
-		}
-	}
+/// Command buffer trait.
+pub trait Buffer: Sized + DeviceOwned {
+	fn handle(&self) -> VulkanBuffer;
 
-	pub(crate) fn handle(&self) -> vk::CommandBuffer {
-		self.handle
-	}
-
-	pub fn record<F>(&mut self, f: F) -> Result<(), RecordError> where F: FnOnce(Recorder<'_, 'a>) -> () {
+	fn record<'a, F>(self, f: F) -> Result<Recorded<'a, Self>, RecordError> where F: FnOnce(&mut Recorder<'a, Self>) -> () {
 		let infos = vk::CommandBufferBeginInfo {
 			flags: vk::CommandBufferUsageFlags::empty(), // TODO
 			p_inheritance_info: std::ptr::null(), // no inheritance for primary buffers.
@@ -80,28 +67,77 @@ impl<'a> Buffer<'a> {
 		};
 
 		unsafe {
-			self.device().handle().begin_command_buffer(self.handle, &infos)?
+			self.device().handle().begin_command_buffer(self.handle(), &infos)?
 		}
 
-		f(Recorder {
-			buffer: self
-		});
+		let mut recorder = Recorder {
+			buffer: self,
+			resources: HashSet::new()
+		};
+
+		f(&mut recorder);
 
 		unsafe {
-			self.device().handle().end_command_buffer(self.handle)?
+			recorder.buffer.device().handle().end_command_buffer(recorder.buffer.handle())?
 		}
 
-		Ok(())
+		Ok(Recorded {
+			buffer: recorder.buffer,
+			resources: recorder.resources
+		})
 	}
 }
 
-impl<'a> DeviceOwned for Buffer<'a> {
+impl<'a, B: Buffer> Buffer for &'a B {
+	#[inline]
+	fn handle(&self) -> VulkanBuffer {
+		(*self).handle()
+	}
+}
+
+pub struct Recorded<'a, B: Buffer> {
+	buffer: B,
+	resources: HashSet<resource::Ref<'a>>
+}
+
+impl<'a, B: Buffer> Recorded<'a, B> {
+	#[inline]
+	pub(crate) fn handle(&self) -> vk::CommandBuffer {
+		self.buffer.handle()
+	}
+
+	pub fn resources(&self) -> &HashSet<resource::Ref<'a>> {
+		&self.resources
+	}
+}
+
+pub struct Raw {
+	pool: Rc<Pool>,
+	handle: vk::CommandBuffer
+}
+
+impl Raw {
+	pub(crate) fn new(pool: &Rc<Pool>, handle: vk::CommandBuffer) -> Self {
+		Raw {
+			pool: pool.clone(),
+			handle
+		}
+	}
+}
+
+impl Buffer for Raw {
+	fn handle(&self) -> vk::CommandBuffer {
+		self.handle
+	}
+}
+
+impl DeviceOwned for Raw {
 	fn device(&self) -> &Arc<Device> {
 		self.pool.device()
 	}
 }
 
-impl<'a> Drop for Buffer<'a> {
+impl Drop for Raw {
 	fn drop(&mut self) {
 		unsafe {
 			self.pool.device().handle().free_command_buffers(self.pool.handle(), &[self.handle])
@@ -109,11 +145,12 @@ impl<'a> Drop for Buffer<'a> {
 	}
 }
 
-pub struct Recorder<'b, 'a> {
-	buffer: &'b mut Buffer<'a>,
+pub struct Recorder<'a, B: Buffer> {
+	buffer: B,
+	resources: HashSet<resource::Ref<'a>>
 }
 
-impl<'b, 'a> Recorder<'b, 'a> {
+impl<'a, B: Buffer> Recorder<'a, B> {
 	pub fn begin_render_pass<I: Image + 'static>(
 		&mut self,
 		render_pass: &Arc<framebuffer::RenderPass>,
@@ -134,39 +171,77 @@ impl<'b, 'a> Recorder<'b, 'a> {
 		};
 
 		unsafe {
-			self.buffer.device().handle().cmd_begin_render_pass(self.buffer.handle, &infos, vk::SubpassContents::INLINE)
+			self.buffer.device().handle().cmd_begin_render_pass(self.buffer.handle(), &infos, vk::SubpassContents::INLINE)
 		}
 
-		self.buffer.resources.insert(render_pass.clone().into());
-		self.buffer.resources.insert(framebuffer.clone().into());
+		self.resources.insert(render_pass.clone().into());
+		self.resources.insert(framebuffer.clone().into());
 	}
 
 	pub fn end_render_pass(&mut self) {
 		unsafe {
-			self.buffer.device().handle().cmd_end_render_pass(self.buffer.handle)
+			self.buffer.device().handle().cmd_end_render_pass(self.buffer.handle())
 		}
 	}
 
 	pub fn bind_graphics_pipeline(&mut self, pipeline: &Arc<pipeline::Graphics>) {
 		unsafe {
-			self.buffer.device().handle().cmd_bind_pipeline(self.buffer.handle, vk::PipelineBindPoint::GRAPHICS, pipeline.handle())
+			self.buffer.device().handle().cmd_bind_pipeline(self.buffer.handle(), vk::PipelineBindPoint::GRAPHICS, pipeline.handle())
 		}
 
-		self.buffer.resources.insert(pipeline.clone().into());
+		self.resources.insert(pipeline.clone().into());
+	}
+
+	pub fn bind_vertex_buffers(&mut self, first_binding: u32, vertex_buffers: mem::Buffers<'a>, offsets: &[u64]) {
+		assert_eq!(vertex_buffers.len(), offsets.len());
+
+		unsafe {
+			self.buffer.device().handle().cmd_bind_vertex_buffers(
+				self.buffer.handle(),
+				first_binding,
+				vertex_buffers.as_vulkan(),
+				offsets
+			)
+		}
+
+		for buffer in vertex_buffers {
+			self.resources.insert(buffer);
+		}
+	}
+
+	pub fn bind_index_buffer<I: 'a + mem::IndexBuffer>(&mut self, index_buffer: I, offset: u64) {
+		unsafe {
+			self.buffer.device().handle().cmd_bind_index_buffer(self.buffer.handle(), index_buffer.handle(), offset, index_buffer.index_type())
+		}
+
+		self.resources.insert(index_buffer.into());
 	}
 
 	pub fn draw(&mut self, vertex_count: u32, instance_count: u32, first_vertex: u32, first_instance: u32) {
 		unsafe {
-			self.buffer.device().handle().cmd_draw(self.buffer.handle, vertex_count, instance_count, first_vertex, first_instance)
+			self.buffer.device().handle().cmd_draw(self.buffer.handle(), vertex_count, instance_count, first_vertex, first_instance)
 		}
 	}
 
-	pub fn copy_buffer<S: 'a + crate::Buffer, D: 'a + crate::Buffer>(&mut self, src: &Arc<S>, dst: &Arc<D>, regions: &[BufferCopy]) {
+	pub fn draw_indexed(&mut self, index_count: u32, instance_count: u32, first_index: u32, vertex_offset: i32, first_instance: u32) {
 		unsafe {
-			self.buffer.device().handle().cmd_copy_buffer(self.buffer.handle, src.handle(), dst.handle(), regions)
+			self.buffer.device().handle().cmd_draw_indexed(
+				self.buffer.handle(),
+				index_count,
+				instance_count,
+				first_index,
+				vertex_offset,
+				first_instance
+			)
+		}
+	}
+
+	pub fn copy_buffer<S: 'a + mem::Buffer, D: 'a + mem::Buffer>(&mut self, src: S, dst: D, regions: &[BufferCopy]) {
+		unsafe {
+			self.buffer.device().handle().cmd_copy_buffer(self.buffer.handle(), src.handle(), dst.handle(), regions)
 		}
 
-		self.buffer.resources.insert(src.clone().into());
-		self.buffer.resources.insert(dst.clone().into());
+		self.resources.insert(src.into());
+		self.resources.insert(dst.into());
 	}
 }

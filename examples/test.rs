@@ -56,7 +56,10 @@ use magma::{
 	Framebuffer,
 	format::ClearValue,
 	Format,
-	command,
+	command::{
+		self,
+		Buffer as CommandBuffer
+	},
 	sync::{
 		Task,
 		semaphore,
@@ -278,7 +281,7 @@ fn create_render_pass(device: &Arc<Device>, format: Format) -> Arc<framebuffer::
 
 pub struct Renderer<W> {
 	swapchain: Swapchain<W>,
-	command_buffers: Vec<command::Buffer<'static>>,
+	command_buffers: Vec<command::buffer::Recorded<'static, command::buffer::Raw>>,
 	queue: Queue,
 	image_available_semaphore: semaphore::Raw,
 	render_finished_semaphore: semaphore::Raw,
@@ -339,8 +342,8 @@ impl<W: 'static> Renderer<W> {
 		}).collect();
 	
 		let pool = Rc::new(command::Pool::new(&device, queue.family()).expect("unable to create command pool"));
-		let mut command_buffers = pool.allocate(framebuffers.len() as u32).expect("unable to allocate command buffers");
-		for (i, buffer) in command_buffers.iter_mut().enumerate() {
+		let command_buffers = pool.allocate(framebuffers.len() as u32).expect("unable to allocate command buffers");
+		let recorded_command_buffers: Vec<_> = command_buffers.into_iter().enumerate().map(|(i, buffer)| {
 			buffer.record(|mut b| {
 				b.begin_render_pass(
 					&render_pass,
@@ -352,7 +355,7 @@ impl<W: 'static> Renderer<W> {
 				b.draw(3, 1, 0, 0);
 				b.end_render_pass();
 			}).expect("unable to record command buffer")
-		}
+		}).collect();
 	
 		let image_available_semaphore = semaphore::Raw::new(&device).expect("unable to create semaphore");
 		let render_finished_semaphore = semaphore::Raw::new(&device).expect("unable to create semaphore");
@@ -360,7 +363,7 @@ impl<W: 'static> Renderer<W> {
 
 		Renderer {
 			swapchain,
-			command_buffers,
+			command_buffers: recorded_command_buffers,
 			queue,
 			image_available_semaphore,
 			render_finished_semaphore,

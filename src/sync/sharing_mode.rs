@@ -35,6 +35,15 @@ impl SharingQueues {
 	}
 }
 
+impl<'a> From<&'a device::Queue> for SharingQueues {
+	fn from(queue: &'a device::Queue) -> Self {
+		SharingQueues {
+			device: queue.device().clone(),
+			queues: vec![queue.index()]
+		}
+	}
+}
+
 impl<'a, I: IntoIterator<Item=&'a device::Queue>> From<I> for SharingQueues {
 	fn from(it: I) -> Self {
 		let mut device = None;

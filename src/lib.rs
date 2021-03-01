@@ -20,9 +20,8 @@ pub mod ops;
 pub mod sync;
 pub mod instance;
 pub mod device;
-pub mod buffer;
 pub mod swapchain;
-pub mod alloc;
+pub mod mem;
 pub mod format;
 pub mod image;
 pub mod pipeline;
@@ -42,7 +41,6 @@ pub use device::{
 	Device,
 	DeviceOwned
 };
-pub use buffer::Buffer;
 pub use format::Format;
 pub use swapchain::Swapchain;
 pub use image::Image;

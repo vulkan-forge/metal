@@ -4,14 +4,21 @@ use std::{
 };
 use crate::{
 	DeviceOwned,
-	device,
-	buffer::MemoryRequirements
+	device
 };
 
-mod buffer;
-pub use buffer::*;
+pub mod buffer;
+mod memory_requirements;
 
-pub unsafe trait Slot {
+pub use buffer::{
+	Buffer,
+	TypedBuffer,
+	IndexBuffer,
+	Buffers
+};
+pub use memory_requirements::MemoryRequirements;
+
+pub unsafe trait Slot: 'static {
 	fn memory(&self) -> &device::Memory;
 
 	fn offset(&self) -> u64;
@@ -20,10 +27,10 @@ pub unsafe trait Slot {
 }
 
 pub unsafe trait HostVisibleSlot: Slot {
-	fn ptr(&self) -> Result<Option<*mut c_void>, device::memory::MapError>;
+	fn ptr(&self) -> Result<*mut c_void, device::memory::MapError>;
 }
 
-pub unsafe trait Allocator: DeviceOwned {
+pub unsafe trait Allocator: 'static + DeviceOwned {
 	type Slot: Slot + From<Self::HostVisibleSlot>;
 	type HostVisibleSlot: HostVisibleSlot + TryFrom<Self::Slot, Error=Self::Slot>;
 

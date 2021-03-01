@@ -12,7 +12,7 @@ use crate::{
 	Device,
 	DeviceOwned
 };
-use super::Buffer;
+use super::buffer;
 
 #[derive(Debug)]
 pub enum CreationError {
@@ -72,7 +72,7 @@ impl Pool {
 		self.handle
 	}
 
-	pub fn allocate<'a>(self: &Rc<Self>, count: u32) -> Result<Vec<Buffer<'a>>, AllocError> {
+	pub fn allocate(self: &Rc<Self>, count: u32) -> Result<Vec<buffer::Raw>, AllocError> {
 		let infos = vk::CommandBufferAllocateInfo {
 			command_pool: self.handle,
 			level: vk::CommandBufferLevel::PRIMARY,
@@ -84,7 +84,7 @@ impl Pool {
 			self.device.handle().allocate_command_buffers(&infos)?
 		};
 
-		Ok(handles.into_iter().map(|h| Buffer::new(self, h)).collect())
+		Ok(handles.into_iter().map(|h| buffer::Raw::new(self, h)).collect())
 	}
 }
 

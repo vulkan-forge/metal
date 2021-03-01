@@ -1,4 +1,4 @@
-mod pool;
+pub mod pool;
 pub mod buffer;
 
 pub use pool::Pool;

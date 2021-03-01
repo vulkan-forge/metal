@@ -15,7 +15,11 @@ pub unsafe trait Task: Sized {
 	/// Error that may be raised by the task when it starts.
 	type Error;
 
-	type Past;
+	/// Task payload.
+	/// 
+	/// Stores all the data borroed by the task that will be
+	/// released upon task completion.
+	type Payload;
 
 	/// Execute the task.
 	/// 
@@ -24,22 +28,17 @@ pub unsafe trait Task: Sized {
 		self,
 		signal_semaphore: Option<&[vk::Semaphore]>,
 		signal_fence: Option<vk::Fence>,
-	) -> Result<(Self::Output, Self::Past), Self::Error>;
+	) -> Result<(Self::Output, Self::Payload), Self::Error>;
 
-	/// Execute the task without signaling any semaphore or fence upon completion.
-	fn in_parallel(self) -> Result<(Self::Output, Self::Past), Self::Error> {
-		self.execute(None, None)
-	}
-
-	fn then_signal_semaphore<S: Semaphore>(self, semaphore: S) -> Result<(Self::Output, semaphore::Future<Self::Past, S>), Self::Error> where Self: SignalSemaphore {
+	fn then_signal_semaphore<S: Semaphore>(self, semaphore: S) -> Result<(Self::Output, semaphore::Future<Self::Payload, S>), Self::Error> where Self: SignalSemaphore {
 		semaphore.signal(self)
 	}
 
-	fn then_signal_fence<F: Fence>(self, fence: F) -> Result<(Self::Output, fence::Future<Self::Past, F>), Self::Error> where Self: SignalFence {
+	fn then_signal_fence<F: Fence>(self, fence: F) -> Result<(Self::Output, fence::Future<Self::Payload, F>), Self::Error> where Self: SignalFence {
 		fence.signal(self)
 	}
 
-	fn then_signal_semaphore_and_fence<S: Semaphore, F: Fence>(self, semaphore: S, fence: F) -> Result<(Self::Output, fence::FutureWithSemaphore<Self::Past, F, S>), Self::Error> where Self: SignalSemaphore + SignalFence {
+	fn then_signal_semaphore_and_fence<S: Semaphore, F: Fence>(self, semaphore: S, fence: F) -> Result<(Self::Output, fence::FutureWithSemaphore<Self::Payload, F, S>), Self::Error> where Self: SignalSemaphore + SignalFence {
 		fence.signal_with_semaphore(semaphore, self)
 	}
 }
@@ -52,6 +51,9 @@ pub unsafe trait Wait: Sized {
 	/// Error that may be raised by the task when it starts.
 	type Error;
 
+	/// Payload.
+	type Payload;
+
 	/// Execute the task.
 	/// 
 	/// Note that `signal_semaphore` and `signal_fence` may not be used.
@@ -60,21 +62,21 @@ pub unsafe trait Wait: Sized {
 		wait_semaphore: Option<&[vk::Semaphore]>,
 		signal_semaphore: Option<&[vk::Semaphore]>,
 		signal_fence: Option<vk::Fence>,
-	) -> Result<Self::Output, Self::Error>;
+	) -> Result<(Self::Output, Self::Payload), Self::Error>;
 }
 
 unsafe impl<T: Wait> Task for T {
 	type Output = T::Output;
 	type Error = T::Error;
-	type Past = ();
+	type Payload = T::Payload;
 
 	#[inline]
 	fn execute(
 		self,
 		signal_semaphore: Option<&[vk::Semaphore]>,
 		signal_fence: Option<vk::Fence>,
-	) -> Result<(Self::Output, ()), Self::Error> {
-		Ok((Wait::execute(self, None, signal_semaphore, signal_fence)?, ()))
+	) -> Result<(Self::Output, Self::Payload), Self::Error> {
+		Wait::execute(self, None, signal_semaphore, signal_fence)
 	}
 }
 
@@ -86,6 +88,8 @@ pub unsafe trait WaitPipelineStages: Sized {
 	/// Error that may be raised by the task when it starts.
 	type Error;
 
+	type Payload;
+
 	/// Execute the task.
 	/// 
 	/// Note that `signal_semaphore` and `signal_fence` may not be used.
@@ -95,12 +99,13 @@ pub unsafe trait WaitPipelineStages: Sized {
 		wait_pipeline_stage_mask: Option<&[pipeline::stage::Flags]>,
 		signal_semaphore: Option<&[vk::Semaphore]>,
 		signal_fence: Option<vk::Fence>,
-	) -> Result<Self::Output, Self::Error>;
+	) -> Result<(Self::Output, Self::Payload), Self::Error>;
 }
 
 unsafe impl<T: WaitPipelineStages> Wait for T {
 	type Output = T::Output;
 	type Error = T::Error;
+	type Payload = T::Payload;
 
 	#[inline]
 	fn execute(
@@ -108,7 +113,7 @@ unsafe impl<T: WaitPipelineStages> Wait for T {
 		wait_semaphore: Option<&[vk::Semaphore]>,
 		signal_semaphore: Option<&[vk::Semaphore]>,
 		signal_fence: Option<vk::Fence>,
-	) -> Result<Self::Output, Self::Error> {
+	) -> Result<(Self::Output, Self::Payload), Self::Error> {
 		WaitPipelineStages::execute(self, wait_semaphore, None, signal_semaphore, signal_fence)
 	}
 }
@@ -132,19 +137,27 @@ impl<P: future::SignalSemaphore, T: Wait> Delayed<P, T> {
 	}
 }
 
+impl<P: future::SignalSemaphore, T: Wait<Payload=()>> Delayed<P, T> {
+	/// Execute the task without signaling any semaphore or fence upon completion.
+	pub fn in_parallel(self) -> Result<(T::Output, P), T::Error> {
+		let (output, (past, ())) = self.execute(None, None)?;
+		Ok((output, past))
+	}
+}
+ 
 unsafe impl<P: future::SignalSemaphore, T: Wait> Task for Delayed<P, T> {
 	type Output = T::Output;
 	type Error = T::Error;
-	type Past = P;
+	type Payload = (P, T::Payload);
 
 	#[inline]
 	fn execute(
 		self,
 		signal_semaphore: Option<&[vk::Semaphore]>,
 		signal_fence: Option<vk::Fence>,
-	) -> Result<(Self::Output, P), Self::Error> {
-		let output = self.task.execute(Some(std::slice::from_ref(self.past.semaphore())), signal_semaphore, signal_fence)?;
-		Ok((output, self.past))
+	) -> Result<(Self::Output, Self::Payload), Self::Error> {
+		let (output, payload) = self.task.execute(Some(std::slice::from_ref(self.past.semaphore())), signal_semaphore, signal_fence)?;
+		Ok((output, (self.past, payload)))
 	}
 }
 
@@ -168,16 +181,16 @@ impl<P: future::SignalSemaphores, T: WaitPipelineStages> DelayedPipelineStages<P
 unsafe impl<P: future::SignalSemaphores, T: WaitPipelineStages> Task for DelayedPipelineStages<P, T> {
 	type Output = T::Output;
 	type Error = T::Error;
-	type Past = P;
+	type Payload = (P, T::Payload);
 
 	#[inline]
 	fn execute(
 		self,
 		signal_semaphore: Option<&[vk::Semaphore]>,
 		signal_fence: Option<vk::Fence>,
-	) -> Result<(Self::Output, P), Self::Error> {
-		let output = self.task.execute(Some(self.past.semaphores()), Some(std::slice::from_ref(&self.wait_pipeline_stage_mask)), signal_semaphore, signal_fence)?;
-		Ok((output, self.past))
+	) -> Result<(Self::Output, Self::Payload), Self::Error> {
+		let (output, payload) = self.task.execute(Some(self.past.semaphores()), Some(std::slice::from_ref(&self.wait_pipeline_stage_mask)), signal_semaphore, signal_fence)?;
+		Ok((output, (self.past, payload)))
 	}
 }
 
