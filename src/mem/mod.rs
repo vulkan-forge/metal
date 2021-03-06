@@ -1,6 +1,5 @@
 use std::{
-	ffi::c_void,
-	convert::TryFrom
+	ffi::c_void
 };
 use crate::{
 	DeviceOwned,
@@ -18,21 +17,27 @@ pub use buffer::{
 };
 pub use memory_requirements::MemoryRequirements;
 
-pub unsafe trait Slot: 'static {
-	fn memory(&self) -> &device::Memory;
-
-	fn offset(&self) -> u64;
-
-	fn size(&self) -> u64;
+#[derive(Debug)]
+pub enum Error {
+	OutOfMemory,
+	Map(device::memory::MapError),
+	Allocation(device::AllocationError)
 }
 
-pub unsafe trait HostVisibleSlot: Slot {
-	fn ptr(&self) -> Result<*mut c_void, device::memory::MapError>;
+impl From<device::memory::MapError> for Error {
+	fn from(e: device::memory::MapError) -> Self {
+		Self::Map(e)
+	}
+}
+
+impl From<device::AllocationError> for Error {
+	fn from(e: device::AllocationError) -> Self {
+		Self::Allocation(e)
+	}
 }
 
 pub unsafe trait Allocator: 'static + DeviceOwned {
-	type Slot: Slot + From<Self::HostVisibleSlot>;
-	type HostVisibleSlot: HostVisibleSlot + TryFrom<Self::Slot, Error=Self::Slot>;
+	type Slot: Slot;
 
 	/// Prepare a memory allocation.
 	///
@@ -47,5 +52,55 @@ pub unsafe trait Allocator: 'static + DeviceOwned {
 	fn prepare(&mut self, memory_requirements: MemoryRequirements);
 
 	/// Allocate some memory.
-	fn allocate(&mut self, memory_requirements: MemoryRequirements) -> Self::Slot;
+	fn allocate(&mut self, memory_requirements: MemoryRequirements) -> Result<Self::Slot, Error>;
+}
+
+pub unsafe trait Slot: 'static {
+	fn memory(&self) -> &device::Memory;
+
+	fn offset(&self) -> u64;
+
+	fn size(&self) -> u64;
+
+	fn ptr(&self) -> Option<*mut c_void>;
+}
+
+pub struct HostVisible<S: Slot>(S);
+
+impl<S: Slot> HostVisible<S> {
+	#[inline]
+	pub fn try_from(s: S) -> Result<Self, S> {
+		if s.ptr().is_some() {
+			Ok(HostVisible(s))
+		} else {
+			Err(s)
+		}
+	}
+
+	#[inline]
+	pub fn ptr(&self) -> *mut c_void {
+		self.0.ptr().unwrap()
+	}
+}
+
+unsafe impl<S: Slot> Slot for HostVisible<S> {
+	#[inline]
+	fn memory(&self) -> &device::Memory {
+		self.0.memory()
+	}
+
+	#[inline]
+	fn offset(&self) -> u64 {
+		self.0.offset()
+	}
+
+	#[inline]
+	fn size(&self) -> u64 {
+		self.0.size()
+	}
+
+	#[inline]
+	fn ptr(&self) -> Option<*mut c_void> {
+		self.0.ptr()
+	}
 }

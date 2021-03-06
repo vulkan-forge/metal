@@ -24,6 +24,11 @@ impl<'a> MemoryType<'a> {
 	}
 
 	#[inline]
+	pub fn size(&self) -> u64 {
+		self.physical_device.p.memory_properties.memory_heaps[self.memory_type.heap_index as usize].size
+	}
+
+	#[inline]
 	pub fn satisfies(&self, reqs: &MemoryRequirements) -> bool {
 		reqs.contains_memory_type_index(self.index)
 	}

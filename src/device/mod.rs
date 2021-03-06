@@ -41,7 +41,10 @@ pub use feature::{
 };
 use feature::IntoFFiFeatures;
 pub use queue::Queue;
-pub use memory::Memory;
+pub use memory::{
+	Memory,
+	MappedMemory
+};
 
 #[derive(Debug)]
 pub enum CreationError {

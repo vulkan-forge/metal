@@ -83,9 +83,23 @@ impl<'a> PhysicalDevice<'a> {
 	}
 
 	#[inline]
+	pub fn memory_type_count(&self) -> u32 {
+		self.p.memory_properties.memory_type_count
+	}
+
+	#[inline]
+	pub fn memory_type(&self, index: u32) -> Option<MemoryType<'a>> {
+		if index < self.memory_type_count() {
+			Some(MemoryType::new(*self, index))
+		} else {
+			None
+		}
+	}
+
+	#[inline]
 	pub fn memory_types(&self) -> impl 'a + Iterator<Item=MemoryType<'a>> {
 		let this = *self;
-		let len = self.p.memory_properties.memory_type_count;
+		let len = self.memory_type_count();
 		(0u32..len).into_iter().map(move |i| MemoryType::new(this, i))
 	}
 

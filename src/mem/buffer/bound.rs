@@ -11,6 +11,7 @@ use crate::{
 	DeviceOwned,
 	mem::{
 		Slot,
+		HostVisible,
 		Allocator,
 		buffer,
 		Buffer
@@ -70,18 +71,18 @@ impl DeviceOwned for Bound {
 /// Host visible buffer.
 pub struct HostVisibleBound<A: Allocator> {
 	inner: buffer::Unbound,
-	slot: A::HostVisibleSlot
+	slot: HostVisible<A::Slot>
 }
 
 impl<A: Allocator> HostVisibleBound<A> {
-	pub(crate) fn new(inner: buffer::Unbound, slot: A::HostVisibleSlot) -> Self {
+	pub(crate) fn new(inner: buffer::Unbound, slot: HostVisible<A::Slot>) -> Self {
 		HostVisibleBound {
 			inner,
 			slot
 		}
 	}
 
-	pub fn memory_slot(&self) -> &A::HostVisibleSlot {
+	pub fn memory_slot(&self) -> &HostVisible<A::Slot> {
 		&self.slot
 	}
 }

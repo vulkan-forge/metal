@@ -15,6 +15,7 @@ use crate::{
 
 #[derive(Debug)]
 pub enum MapError {
+	NotHostVisible,
 	OutOfMemory(OomError),
 	MemoryMapFailed
 }
@@ -72,33 +73,76 @@ impl Memory {
 	}
 
 	/// Map the memory to host address space.
-	/// 
-	/// # Safety
-	/// 
-	/// The memory must be host visible and not already mapped.
 	#[inline]
-	pub unsafe fn map(&self, offset: u64, size: u64) -> Result<*mut c_void, MapError> {
-		let ptr = self.device.handle.map_memory(
-			self.handle,
-			offset,
-			size,
-			vk::MemoryMapFlags::empty()
-		)?;
-		Ok(ptr)
-	}
+	pub fn map(self, offset: u64, size: Option<u64>) -> Result<MappedMemory, MapError> {
+		if self.memory_type().is_host_visible() {
+			let ptr = unsafe {
+				self.device.handle.map_memory(
+					self.handle,
+					offset,
+					size.unwrap_or(vk::WHOLE_SIZE),
+					vk::MemoryMapFlags::empty()
+				)?
+			};
 
-	/// Unmap the memory from host address space.
-	/// 
-	/// # Safety
-	/// 
-	/// The memory must be mapped.
-	pub unsafe fn unmap(&self) {
-		self.device.handle.unmap_memory(self.handle)
+			Ok(MappedMemory {
+				memory: self,
+				ptr
+			})
+		} else {
+			Err(MapError::NotHostVisible)
+		}
 	}
 }
 
 impl DeviceOwned for Memory {
 	fn device(&self) -> &Arc<Device> {
 		&self.device
+	}
+}
+
+impl Drop for Memory {
+	fn drop(&mut self) {
+		unsafe {
+			self.device.handle.free_memory(self.handle, None)
+		}
+	}
+}
+
+pub struct MappedMemory {
+	memory: Memory,
+	ptr: *mut c_void
+}
+
+impl MappedMemory {
+	pub fn ptr(&self) -> *mut c_void {
+		self.ptr
+	}
+
+	pub fn as_memory(&self) -> &Memory {
+		&self.memory
+	}
+
+	fn into_raw_parts(&self) -> (Memory, *mut c_void) {
+		let memory = unsafe { std::ptr::read(&self.memory) };
+		let ptr = self.ptr;
+		std::mem::forget(self);
+		(memory, ptr)
+	}
+
+	/// Unmap the memory from host address space.
+	pub fn unmap(self) -> Memory {
+		let (memory, _) = self.into_raw_parts();
+		unsafe { memory.device.handle.unmap_memory(memory.handle) };
+		memory
+	}
+}
+
+impl Drop for MappedMemory {
+	fn drop(&mut self) {
+		// unmap the memory.
+		unsafe {
+			self.memory.device.handle.unmap_memory(self.memory.handle)
+		}
 	}
 }
