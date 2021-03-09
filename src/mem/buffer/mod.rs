@@ -1,4 +1,5 @@
 use ash::vk;
+use crate::resource::Proxy;
 
 mod usage;
 mod unbound;
@@ -13,15 +14,16 @@ pub use typed::*;
 pub use index::*;
 
 /// Buffer.
-pub unsafe trait Buffer: crate::Resource {
-	fn handle(&self) -> vk::Buffer;
+pub unsafe trait Buffer: crate::Resource<Handle=vk::Buffer> {
+	// ...
 }
 
 unsafe impl<B: std::ops::Deref> Buffer for B where B::Target: Buffer {
-	#[inline]
-	fn handle(&self) -> vk::Buffer {
-		self.deref().handle()
-	}
+	// ...
+}
+
+unsafe impl<B: Buffer> Buffer for Proxy<B> {
+	// ...
 }
 
 /// Typed buffer.
@@ -34,17 +36,25 @@ unsafe impl<B: std::ops::Deref> TypedBuffer for B where B::Target: TypedBuffer {
 	type Item = <B::Target as TypedBuffer>::Item;
 }
 
-pub struct Buffers<'a> {
+unsafe impl<B: TypedBuffer> TypedBuffer for Proxy<B> {
+	type Item = B::Item;
+}
+
+pub struct LocalBuffers<'a> {
 	handles: Vec<vk::Buffer>,
 	resources: Vec<crate::resource::Ref<'a>>
 }
 
-impl<'a> Buffers<'a> {
+impl<'a> LocalBuffers<'a> {
 	pub fn new() -> Self {
 		Self {
 			handles: Vec::new(),
 			resources: Vec::new()
 		}
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.handles.is_empty()
 	}
 
 	pub fn len(&self) -> usize {
@@ -61,9 +71,49 @@ impl<'a> Buffers<'a> {
 	}
 }
 
-impl<'a> IntoIterator for Buffers<'a> {
+impl<'a> IntoIterator for LocalBuffers<'a> {
 	type Item = crate::resource::Ref<'a>;
 	type IntoIter = std::vec::IntoIter<crate::resource::Ref<'a>>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.resources.into_iter()
+	}
+}
+
+pub struct Buffers<'a> {
+	handles: Vec<vk::Buffer>,
+	resources: Vec<crate::resource::SendRef<'a>>
+}
+
+impl<'a> Buffers<'a> {
+	pub fn new() -> Self {
+		Self {
+			handles: Vec::new(),
+			resources: Vec::new()
+		}
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.handles.is_empty()
+	}
+
+	pub fn len(&self) -> usize {
+		self.handles.len()
+	}
+
+	pub fn push<B: 'a + Send + Buffer>(&mut self, buffer: B) {
+		self.handles.push(buffer.handle());
+		self.resources.push(buffer.into());
+	}
+
+	pub(crate) fn as_vulkan(&self) -> &[vk::Buffer] {
+		&self.handles
+	}
+}
+
+impl<'a> IntoIterator for Buffers<'a> {
+	type Item = crate::resource::SendRef<'a>;
+	type IntoIter = std::vec::IntoIter<crate::resource::SendRef<'a>>;
 
 	fn into_iter(self) -> Self::IntoIter {
 		self.resources.into_iter()

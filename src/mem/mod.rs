@@ -13,7 +13,8 @@ pub use buffer::{
 	Buffer,
 	TypedBuffer,
 	IndexBuffer,
-	Buffers
+	Buffers,
+	LocalBuffers
 };
 pub use memory_requirements::MemoryRequirements;
 

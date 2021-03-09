@@ -113,6 +113,16 @@ impl From<vk::Result> for AllocationError {
 #[derive(Debug)]
 pub struct MissingExtensionError(pub Extension);
 
+impl std::error::Error for MissingExtensionError {
+	// ...
+}
+
+impl fmt::Display for MissingExtensionError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "missing device extension `{}`", self.0)
+	}
+}
+
 pub struct Device {
 	pub(crate) handle: ash::Device,
 	instance: Arc<Instance>,
@@ -256,6 +266,12 @@ pub trait DeviceOwned {
 impl<'a, T: ?Sized + DeviceOwned> DeviceOwned for &'a T {
 	fn device(&self) -> &Arc<Device> {
 		(*self).device()
+	}
+}
+
+impl<'a, T: ?Sized + DeviceOwned> DeviceOwned for std::rc::Rc<T> {
+	fn device(&self) -> &Arc<Device> {
+		(**self).device()
 	}
 }
 

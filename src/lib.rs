@@ -1,6 +1,8 @@
 #![feature(generic_associated_types)]
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate static_assertions;
 
 use std::{
 	error::Error,

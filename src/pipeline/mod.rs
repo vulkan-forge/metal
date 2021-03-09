@@ -11,7 +11,7 @@ pub mod multisample;
 pub mod depth_test;
 pub mod stencil_test;
 pub mod color_blend;
-mod dynamic_state;
+pub mod dynamic_state;
 pub mod graphics;
 
 pub use stage::Stages;
@@ -30,4 +30,7 @@ pub use dynamic_state::{
 	DynamicState,
 	DynamicStates
 };
-pub use graphics::Graphics;
+pub use graphics::{
+	GraphicsPipeline,
+	Graphics
+};

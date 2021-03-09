@@ -63,6 +63,17 @@ pub trait SignalFence: Futures {
 	fn wait(self, timeout: Option<u64>) -> Result<(), fence::WaitError>;
 
 	fn is_signaled(&self) -> Result<bool, fence::DeviceLost>;
+
+	/// Unwrap and drop the fence.
+	/// 
+	/// The fence must be signaled.
+	fn unwrap(self) -> Result<(), fence::UnwrapError<Self>> where Self: Sized {
+		match self.is_signaled() {
+			Ok(true) => Ok(()),
+			Ok(false) => Err(fence::UnwrapError::Unsignaled(self)),
+			Err(fence::DeviceLost) => Err(fence::UnwrapError::DeviceLost)
+		}
+	}
 }
 
 pub trait SignalSemaphores {

@@ -45,7 +45,7 @@ use magma::{
 			self,
 			BlendFactor
 		},
-		Layout,
+		layout,
 		DynamicStates
 	},
 	win::{
@@ -58,6 +58,7 @@ use magma::{
 	Format,
 	command::{
 		self,
+		Pool,
 		Buffer as CommandBuffer
 	},
 	sync::{
@@ -139,13 +140,12 @@ pub fn main() {
 
 	let render_pass = create_render_pass(&device, color_format);
 
-	let layout = Arc::new(Layout::new(&device, &[], &[]).expect("unable to create pipeline layout"));
+	let layout = layout::Empty::new(&device).expect("unable to create pipeline layout");
 	
-	let vertex_input = VertexInput::new();
-	let pipeline = Arc::new(pipeline::Graphics::new::<_, _, 1>(
+	let pipeline: Arc<pipeline::Graphics<layout::Empty, (), ()>> = Arc::new(pipeline::Graphics::new(
 		&device,
 		&stages,
-		vertex_input,
+		(), // no vertex input
 		InputAssembly::new(input_assembly::Topology::TriangleList, false),
 		None, // no tesselation
 		[Viewport::new(0.0, 0.0, dimensions.0 as f32, dimensions.1 as f32, 0.0, 1.0)],
@@ -173,9 +173,8 @@ pub fn main() {
 			)),
 			color_blend::ColorComponents::rgba()
 		)),
-		&layout,
-		render_pass.subpass(0).unwrap(),
-		DynamicStates::empty()
+		layout,
+		render_pass.subpass(0).unwrap()
 	).expect("unable to create pipeline"));
 
 	let mut renderer = None;
@@ -281,7 +280,7 @@ fn create_render_pass(device: &Arc<Device>, format: Format) -> Arc<framebuffer::
 
 pub struct Renderer<W> {
 	swapchain: Swapchain<W>,
-	command_buffers: Vec<command::buffer::Recorded<'static, command::buffer::Raw>>,
+	command_buffers: Vec<command::buffer::LocallyRecorded<'static, command::pool::raw::RcBuffer>>,
 	queue: Queue,
 	image_available_semaphore: semaphore::Raw,
 	render_finished_semaphore: semaphore::Raw,
@@ -297,7 +296,7 @@ impl<W: 'static> Renderer<W> {
 		dimensions: (u32, u32),
 		queue: Queue,
 		render_pass: &Arc<framebuffer::RenderPass>,
-		pipeline: &Arc<pipeline::Graphics>
+		pipeline: &Arc<pipeline::Graphics<layout::Empty, (), ()>>
 	) -> Self {
 		let surface_capabilities = surface.capabilities(device.physical_device()).unwrap();
 
@@ -341,19 +340,18 @@ impl<W: 'static> Renderer<W> {
 			).expect("unable to create framebuffer"))
 		}).collect();
 	
-		let pool = Rc::new(command::Pool::new(&device, queue.family()).expect("unable to create command pool"));
-		let command_buffers = pool.allocate(framebuffers.len() as u32).expect("unable to allocate command buffers");
+		let pool = Rc::new(command::pool::Raw::new(&device, queue.family()).expect("unable to create command pool"));
+		let command_buffers = pool.allocate_rc(framebuffers.len() as u32).expect("unable to allocate command buffers");
 		let recorded_command_buffers: Vec<_> = command_buffers.into_iter().enumerate().map(|(i, buffer)| {
-			buffer.record(|mut b| {
-				b.begin_render_pass(
+			buffer.record_local(|b| {
+				let mut render_pass = b.begin_render_pass(
 					&render_pass,
 					&framebuffers[i],
 					(0, 0, dimensions.0, dimensions.1),
 					&[ClearValue::f32color(0.0, 0.0, 0.0, 1.0)]
 				);
-				b.bind_graphics_pipeline(&pipeline);
-				b.draw(3, 1, 0, 0);
-				b.end_render_pass();
+
+				render_pass.draw(&pipeline, (), (), 3, 1, 0, 0);
 			}).expect("unable to record command buffer")
 		}).collect();
 	

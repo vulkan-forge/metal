@@ -23,13 +23,13 @@ use crate::{
 /// Typed buffer.
 pub struct Typed<T> {
 	inner: buffer::Unbound,
-	slot: Box<dyn Slot>,
+	slot: Box<dyn Send + Slot>,
 	t: PhantomData<T>,
 	len: u64
 }
 
 impl<T> Typed<T> {
-	pub(crate) fn from_raw_parts(inner: buffer::Unbound, slot: Box<dyn Slot>) -> Self {
+	pub(crate) fn from_raw_parts(inner: buffer::Unbound, slot: Box<dyn Send + Slot>) -> Self {
 		let len = inner.len() / std::mem::size_of::<T>() as u64;
 		Self {
 			inner,
@@ -39,7 +39,7 @@ impl<T> Typed<T> {
 		}
 	}
 
-	pub fn memory_slot(&self) -> &dyn Slot {
+	pub fn memory_slot(&self) -> &(dyn Send + Slot) {
 		self.slot.as_ref()
 	}
 
@@ -52,15 +52,15 @@ impl<T> Typed<T> {
 }
 
 unsafe impl<T> crate::Resource for Typed<T> {
-	fn uid(&self) -> u64 {
-		self.inner.handle().as_raw()
+	type Handle = vk::Buffer;
+
+	fn handle(&self) -> vk::Buffer {
+		self.inner.handle()
 	}
 }
 
 unsafe impl<T> Buffer for Typed<T> {
-	fn handle(&self) -> vk::Buffer {
-		self.inner.handle()
-	}
+	// ...
 }
 
 unsafe impl<T> TypedBuffer for Typed<T> {

@@ -12,10 +12,11 @@ win = [ "winit" ]
 ash = "^0.31"
 cc-traits = "^0.4"
 once_cell = "*"
+crossbeam-queue = "*"
 maybe-owned = "^0.3"
 log = "*"
-
 winit = { version = "^0.24", optional = true }
+static_assertions = "^1.1"
 
 [dev-dependencies]
 stderrlog = "*"

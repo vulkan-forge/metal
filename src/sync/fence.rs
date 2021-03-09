@@ -4,7 +4,8 @@ use ash::{
 };
 use std::{
 	borrow::Borrow,
-	sync::Arc
+	sync::Arc,
+	fmt
 };
 use crate::{
 	OomError,
@@ -45,6 +46,26 @@ impl From<vk::Result> for DeviceLost {
 			vk::Result::ERROR_DEVICE_LOST => DeviceLost,
 			_ => unreachable!()
 		}
+	}
+}
+
+pub enum UnwrapError<F> {
+	Unsignaled(F),
+	DeviceLost
+}
+
+impl<F> fmt::Display for UnwrapError<F> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Self::Unsignaled(_) => write!(f, "unsignaled fence"),
+			Self::DeviceLost => write!(f, "device lost")
+		}
+	}
+}
+
+impl<F> fmt::Debug for UnwrapError<F> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		fmt::Display::fmt(self, f)
 	}
 }
 

@@ -10,7 +10,8 @@ use crate::{
 	OomError,
 	Device,
 	image,
-	Image
+	Image,
+	Resource
 };
 pub mod render_pass;
 pub use render_pass::{
@@ -105,10 +106,6 @@ impl<I: Image> Framebuffer<I> {
 		})
 	}
 
-	pub(crate) fn handle(&self) -> vk::Framebuffer {
-		self.handle
-	}
-
 	pub fn views(&self) -> &[Arc<image::View<I>>] {
 		&self.views
 	}
@@ -119,9 +116,10 @@ impl<I: Image> Framebuffer<I> {
 }
 
 unsafe impl<I: Image> crate::Resource for Framebuffer<I> {
-	fn uid(&self) -> u64 {
-		use vk::Handle;
-		self.handle().as_raw()
+	type Handle = vk::Framebuffer;
+
+	fn handle(&self) -> vk::Framebuffer {
+		self.handle
 	}
 }
 

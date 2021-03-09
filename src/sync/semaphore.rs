@@ -16,8 +16,10 @@ use super::{
 	future
 };
 
+pub type VulkanSemaphore = vk::Semaphore;
+
 pub trait Semaphore {
-	fn handle(&self) -> &vk::Semaphore;
+	fn handle(&self) -> &VulkanSemaphore;
 
 	/// Signal this semaphore after executing the given task.
 	fn signal<T: task::SignalSemaphore>(self, task: T) -> Result<(T::Output, Future<T::Payload, Self>), T::Error> where Self: Sized {

@@ -18,6 +18,7 @@ impl Rate {
 	}
 }
 
+#[repr(transparent)]
 pub struct Binding(vk::VertexInputBindingDescription); // This MUST be homomorphic to `vk::VertexInputBindingDescription`.
 
 impl Binding {
@@ -30,6 +31,7 @@ impl Binding {
 	}
 }
 
+#[repr(transparent)]
 pub struct Attribute(vk::VertexInputAttributeDescription); // This MUST be homomorphic to `vk::VertexInputAttributeDescription`.
 
 impl Attribute {
@@ -43,40 +45,70 @@ impl Attribute {
 	}
 }
 
-pub struct VertexInput {
-	bindings: Vec<Binding>,
-	attributes: Vec<Attribute>,
-	handle: vk::PipelineVertexInputStateCreateInfo
+pub unsafe trait Bind<'a, I: VertexInput>: Sized {
+	type Offsets: AsRef<[u64]>;
+
+	fn get(self) -> (u32, crate::mem::LocalBuffers<'a>, Self::Offsets);
 }
 
-impl VertexInput {
-	pub fn new() -> Self {
-		VertexInput {
-			bindings: Vec::new(),
-			attributes: Vec::new(),
-			handle: vk::PipelineVertexInputStateCreateInfo::default()
-		}
-	}
+unsafe impl<'a> Bind<'a, ()> for () {
+	type Offsets = [u64; 0];
 
-	pub fn add_binding(&mut self, binding: Binding) -> u32 {
-		let index = self.bindings.len() as u32;
-		self.bindings.push(binding);
-
-		self.handle.vertex_binding_description_count = self.bindings.len() as u32;
-		self.handle.p_vertex_binding_descriptions = self.bindings.as_ptr() as *const _;
-
-		index
-	}
-
-	pub fn add_attribute(&mut self, attr: Attribute) {
-		self.attributes.push(attr);
-
-		self.handle.vertex_attribute_description_count = self.attributes.len() as u32;
-		self.handle.p_vertex_attribute_descriptions = self.attributes.as_ptr() as *const _;
-	}
-
-	/// Returns the vulkan representation.
-	pub(crate) fn as_vulkan(&self) -> &vk::PipelineVertexInputStateCreateInfo {
-		&self.handle
+	fn get(self) -> (u32, crate::mem::LocalBuffers<'a>, Self::Offsets) {
+		(0, crate::mem::LocalBuffers::new(), [])
 	}
 }
+
+pub unsafe trait VertexInput: 'static {
+	fn bindings(&self) -> &[Binding];
+
+	fn attributes(&self) -> &[Attribute];
+}
+
+unsafe impl VertexInput for () {
+	fn bindings(&self) -> &[Binding] {
+		&[]
+	}
+
+	fn attributes(&self) -> &[Attribute] {
+		&[]
+	}
+}
+
+// pub struct VertexInput {
+// 	bindings: Vec<Binding>,
+// 	attributes: Vec<Attribute>,
+// 	handle: vk::PipelineVertexInputStateCreateInfo
+// }
+
+// impl VertexInput {
+// 	pub fn new() -> Self {
+// 		VertexInput {
+// 			bindings: Vec::new(),
+// 			attributes: Vec::new(),
+// 			handle: vk::PipelineVertexInputStateCreateInfo::default()
+// 		}
+// 	}
+
+// 	pub fn add_binding(&mut self, binding: Binding) -> u32 {
+// 		let index = self.bindings.len() as u32;
+// 		self.bindings.push(binding);
+
+// 		self.handle.vertex_binding_description_count = self.bindings.len() as u32;
+// 		self.handle.p_vertex_binding_descriptions = self.bindings.as_ptr() as *const _;
+
+// 		index
+// 	}
+
+// 	pub fn add_attribute(&mut self, attr: Attribute) {
+// 		self.attributes.push(attr);
+
+// 		self.handle.vertex_attribute_description_count = self.attributes.len() as u32;
+// 		self.handle.p_vertex_attribute_descriptions = self.attributes.as_ptr() as *const _;
+// 	}
+
+// 	/// Returns the vulkan representation.
+// 	pub(crate) fn as_vulkan(&self) -> &vk::PipelineVertexInputStateCreateInfo {
+// 		&self.handle
+// 	}
+// }

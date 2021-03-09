@@ -107,7 +107,7 @@ impl Unbound {
 	}
 
 	#[inline]
-	pub unsafe fn bind<S: Slot>(self, slot: S) -> Result<Bound, (Self, BindError)> {
+	pub unsafe fn bind<S: Send + Slot>(self, slot: S) -> Result<Bound, (Self, BindError)> {
 		let memory = slot.memory();
 		
 		// We check for correctness in debug mode.

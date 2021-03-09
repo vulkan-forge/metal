@@ -23,6 +23,22 @@ impl From<vk::Result> for CreationError {
 	}
 }
 
+pub unsafe trait Sets {
+	// ...
+}
+
+/// Describes the transition between two descriptor sets.
+/// 
+/// This trait is used to call [`vkCmdBindDescriptorSets`](https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/vkCmdBindDescriptorSets.html)
+/// with the appropriate parameters.
+pub unsafe trait Transition<A, B> {
+	fn first_set(&self) -> u32;
+
+	fn descriptor_sets(&self) -> &[vk::DescriptorSet];
+
+	fn dynamic_offsets(&self) -> &[u32];
+}
+
 pub struct Set {
 	device: Arc<Device>,
 	handle: vk::DescriptorSetLayout

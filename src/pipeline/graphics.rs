@@ -3,12 +3,14 @@ use ash::{
 	version::DeviceV1_0
 };
 use std::{
-	sync::Arc
+	sync::Arc,
+	marker::PhantomData
 };
 use crate::{
 	OomError,
 	Device,
-	framebuffer
+	framebuffer,
+	Resource
 };
 use super::{
 	shader,
@@ -46,20 +48,30 @@ impl From<vk::Result> for CreationError {
 	}
 }
 
-pub struct Graphics {
+pub trait GraphicsPipeline: Resource<Handle=vk::Pipeline> {
+	type Layout: Layout;
+	type VertexInput: VertexInput;
+	type DynamicStates: DynamicStates;
+
+	fn layout(&self) -> &Self::Layout;
+}
+
+pub struct Graphics<L: Layout, I: VertexInput, D: DynamicStates> {
 	device: Arc<Device>,
 	render_subpass: framebuffer::render_pass::subpass::Reference,
 	handle: vk::Pipeline,
 	shaders: Vec<Arc<shader::Module>>,
-	dynamic_states: DynamicStates
+	layout: L,
+	vertex_input: PhantomData<I>,
+	dynamic_states: PhantomData<D>
 }
 
-impl Graphics {
+impl<L: Layout, I: VertexInput, D: DynamicStates> Graphics<L, I, D> {
 	/// Creates a new graphics pipeline.
-	pub fn new<S: Stages, D: Into<DynamicStates>, const V: usize>(
+	pub fn new<S: Stages, const V: usize>(
 		device: &Arc<Device>,
 		stages: &S,
-		vertex_input: VertexInput,
+		vertex_input: I,
 		input_assembly: InputAssembly,
 		tesselation: Option<Tesselation>,
 		viewports: [Viewport; V],
@@ -69,10 +81,9 @@ impl Graphics {
 		depth_test: Option<DepthTest>,
 		stencil_tests: Option<(StencilTest, StencilTest)>,
 		color_blend: ColorBlend,
-		layout: &Arc<Layout>,
-		render_subpass: framebuffer::render_pass::subpass::Reference,
-		dynamic_states: D
-	) -> Result<Graphics, CreationError> {
+		layout: L,
+		render_subpass: framebuffer::render_pass::subpass::Reference
+	) -> Result<Graphics<L, I, D>, CreationError> {
 		let mut shaders = Vec::new();
 		let mut vk_stages = Vec::new();
 		stages.for_each(|stage| {
@@ -112,20 +123,25 @@ impl Graphics {
 			None
 		};
 
-		let dynamic_states = dynamic_states.into();
-		let vk_dynamic_states = dynamic_states.into_vulkan();
+		let vk_dynamic_states = D::vulkan();
 		let dynamic_state = vk::PipelineDynamicStateCreateInfo {
 			dynamic_state_count: vk_dynamic_states.len() as u32,
 			p_dynamic_states: vk_dynamic_states.as_ptr() as *const _,
 			..Default::default()
 		};
 
+		let mut vertex_input_state = vk::PipelineVertexInputStateCreateInfo::default();
+		vertex_input_state.vertex_binding_description_count = vertex_input.bindings().len() as u32;
+		vertex_input_state.p_vertex_binding_descriptions = vertex_input.bindings().as_ptr() as *const _;
+		vertex_input_state.vertex_attribute_description_count = vertex_input.attributes().len() as u32;
+		vertex_input_state.p_vertex_attribute_descriptions = vertex_input.attributes().as_ptr() as *const _;
+
 		let infos = vk::GraphicsPipelineCreateInfo {
 			// Shader stages
 			stage_count: vk_stages.len() as u32,
 			p_stages: vk_stages.as_ptr(),
 			//
-			p_vertex_input_state: vertex_input.as_vulkan(),
+			p_vertex_input_state: &vertex_input_state,
 			p_input_assembly_state: input_assembly.as_vulkan(),
 			p_tessellation_state: tesselation.as_ref().map(|t| t.as_vulkan() as *const _).unwrap_or(std::ptr::null()),
 			//
@@ -157,12 +173,14 @@ impl Graphics {
 			}
 		};
 
-		Ok(Graphics {
+		Ok(Self {
 			device: device.clone(),
 			render_subpass: render_subpass,
 			handle,
 			shaders,
-			dynamic_states
+			layout,
+			vertex_input: PhantomData,
+			dynamic_states: PhantomData
 		})
 	}
 
@@ -171,16 +189,21 @@ impl Graphics {
 	}
 }
 
-impl Graphics {
-	pub(crate) fn handle(&self) -> vk::Pipeline {
+unsafe impl<L: Layout, I: VertexInput, D: DynamicStates> crate::Resource for Graphics<L, I, D> {
+	type Handle = vk::Pipeline;
+
+	fn handle(&self) -> vk::Pipeline {
 		self.handle
 	}
 }
 
-unsafe impl crate::Resource for Graphics {
-	fn uid(&self) -> u64 {
-		use vk::Handle;
-		self.handle().as_raw()
+impl<L: Layout, I: VertexInput, D: DynamicStates> GraphicsPipeline for Graphics<L, I, D> {
+	type Layout = L;
+	type VertexInput = I;
+	type DynamicStates = D;
+
+	fn layout(&self) -> &L {
+		&self.layout
 	}
 }
 
@@ -196,7 +219,7 @@ unsafe impl crate::Resource for Graphics {
 // 	}
 // }
 
-impl Drop for Graphics {
+impl<L: Layout, I: VertexInput, D: DynamicStates> Drop for Graphics<L, I, D> {
 	fn drop(&mut self) {
 		unsafe {
 			self.device.handle().destroy_pipeline(self.handle, None)

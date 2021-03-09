@@ -5,25 +5,12 @@ pub use std::{
 		Hasher
 	}
 };
+use super::{
+	AbstractResource,
+	Resource
+};
 
-/// GPU resource.
-pub unsafe trait Resource {
-	/// Unique identifier of the resource.
-	/// 
-	/// ## Safety
-	/// 
-	/// This must be unique across a given device.
-	fn uid(&self) -> u64;
-}
-
-unsafe impl<B: std::ops::Deref> Resource for B where B::Target: Resource {
-	#[inline]
-	fn uid(&self) -> u64 {
-		self.deref().uid()
-	}
-}
-
-pub struct Ref<'a>(Box<dyn 'a + Resource>);
+pub struct Ref<'a>(Box<dyn 'a + AbstractResource>);
 
 impl<'a> Ref<'a> {
 	#[inline]
@@ -48,7 +35,7 @@ impl<'a> Hash for Ref<'a> {
 	}
 }
 
-impl<'a, R: 'a + Resource> From<R> for Ref<'a> {
+impl<'a, R: 'a + AbstractResource> From<R> for Ref<'a> {
 	fn from(r: R) -> Self {
 		Self(Box::new(r))
 	}

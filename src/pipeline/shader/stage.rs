@@ -39,7 +39,7 @@ impl Stages {
 	/// Creates a `Stages` struct will all stages set to `true`.
 	// TODO: add example
 	#[inline]
-	pub fn all() -> Stages {
+	pub const fn all() -> Stages {
 		Stages {
 			vertex: true,
 			tessellation_control: true,
@@ -53,7 +53,7 @@ impl Stages {
 	/// Creates a `Stages` struct will all stages set to `false`.
 	// TODO: add example
 	#[inline]
-	pub fn none() -> Stages {
+	pub const fn none() -> Stages {
 		Stages {
 			vertex: false,
 			tessellation_control: false,
@@ -67,7 +67,7 @@ impl Stages {
 	/// Creates a `Stages` struct with all graphics stages set to `true`.
 	// TODO: add example
 	#[inline]
-	pub fn all_graphics() -> Stages {
+	pub const fn all_graphics() -> Stages {
 		Stages {
 			vertex: true,
 			tessellation_control: true,
@@ -81,7 +81,7 @@ impl Stages {
 	/// Creates a `Stages` struct with the compute stage set to `true`.
 	// TODO: add example
 	#[inline]
-	pub fn compute() -> Stages {
+	pub const fn compute() -> Stages {
 		Stages {
 			vertex: false,
 			tessellation_control: false,
@@ -95,7 +95,7 @@ impl Stages {
 	/// Checks whether we have more stages enabled than `other`.
 	// TODO: add example
 	#[inline]
-	pub fn is_superset_of(&self, other: &Stages) -> bool {
+	pub const fn is_superset_of(&self, other: &Stages) -> bool {
 		(self.vertex || !other.vertex)
 			&& (self.tessellation_control || !other.tessellation_control)
 			&& (self.tessellation_evaluation || !other.tessellation_evaluation)
@@ -107,7 +107,7 @@ impl Stages {
 	/// Checks whether any of the stages in `self` are also present in `other`.
 	// TODO: add example
 	#[inline]
-	pub fn intersects(&self, other: &Stages) -> bool {
+	pub const fn intersects(&self, other: &Stages) -> bool {
 		(self.vertex && other.vertex)
 			|| (self.tessellation_control && other.tessellation_control)
 			|| (self.tessellation_evaluation && other.tessellation_evaluation)
@@ -117,29 +117,29 @@ impl Stages {
 	}
 
 	#[inline]
-	pub(crate) fn into_vulkan(self) -> vk::ShaderStageFlags {
-		let mut result = vk::ShaderStageFlags::empty();
+	pub(crate) const fn into_vulkan(self) -> vk::ShaderStageFlags {
+		let mut result = 0;
 
 		if self.vertex {
-			result |= vk::ShaderStageFlags::VERTEX;
+			result |= vk::ShaderStageFlags::VERTEX.as_raw();
 		}
 		if self.tessellation_control {
-			result |= vk::ShaderStageFlags::TESSELLATION_CONTROL;
+			result |= vk::ShaderStageFlags::TESSELLATION_CONTROL.as_raw();
 		}
 		if self.tessellation_evaluation {
-			result |= vk::ShaderStageFlags::TESSELLATION_EVALUATION;
+			result |= vk::ShaderStageFlags::TESSELLATION_EVALUATION.as_raw();
 		}
 		if self.geometry {
-			result |= vk::ShaderStageFlags::GEOMETRY;
+			result |= vk::ShaderStageFlags::GEOMETRY.as_raw();
 		}
 		if self.fragment {
-			result |= vk::ShaderStageFlags::FRAGMENT;
+			result |= vk::ShaderStageFlags::FRAGMENT.as_raw();
 		}
 		if self.compute {
-			result |= vk::ShaderStageFlags::COMPUTE;
+			result |= vk::ShaderStageFlags::COMPUTE.as_raw();
 		}
 
-		result
+		vk::ShaderStageFlags::from_raw(result)
 	}
 }
 

@@ -14,7 +14,8 @@ use crate::{
 	sync::{
 		self,
 		task,
-	}
+	},
+	fmt
 };
 use super::Device;
 
@@ -31,6 +32,19 @@ impl From<vk::Result> for SubmitError {
 			vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => SubmitError::OutOfMemory(OomError::Device),
 			vk::Result::ERROR_DEVICE_LOST => SubmitError::DeviceLost,
 			_ => unreachable!()
+		}
+	}
+}
+
+impl std::error::Error for SubmitError {
+	// ...
+}
+
+impl fmt::Display for SubmitError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Self::OutOfMemory(e) => e.fmt(f),
+			Self::DeviceLost => write!(f, "device lost"),
 		}
 	}
 }
@@ -59,6 +73,20 @@ impl From<vk::Result> for PresentError {
 	}
 }
 
+impl std::error::Error for PresentError {
+	// ...
+}
+
+impl fmt::Display for PresentError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Self::OutOfMemory(e) => e.fmt(f),
+			Self::DeviceLost => write!(f, "device lost"),
+			Self::MissingDeviceExtension(e) => e.fmt(f)
+		}
+	}
+}
+
 /// Device queue.
 pub struct Queue {
 	device: Arc<Device>,
@@ -77,15 +105,6 @@ impl Queue {
 		}
 	}
 
-	pub fn token(&self) -> Token {
-		Token {
-			device: self.device.clone(),
-			handle: self.handle,
-			queue_family_index: self.queue_family_index,
-			queue_index: self.queue_index
-		}
-	}
-
 	pub fn index(&self) -> u32 {
 		self.queue_index
 	}
@@ -98,7 +117,7 @@ impl Queue {
 		self.device.physical_device().queue_family(self.queue_family_index).unwrap()
 	}
 
-	pub fn submit<'a, 'b, 'r: 'b, B: 'a + command::Buffer, R>(&'a mut self, buffer: R) -> Submit<'a, 'b, 'r, B> where R: Into<MaybeOwned<'b, command::buffer::Recorded<'r, B>>> {
+	pub fn submit<'a, B: 'a + command::RecordedBuffer>(&'a mut self, buffer: B) -> Submit<'a, B> {
 		// TODO check inner buffer queue access.
 
 		Submit {
@@ -122,15 +141,15 @@ impl DeviceOwned for Queue {
 	}
 }
 
-pub struct Submit<'a, 'b, 'r, B: command::Buffer> {
+pub struct Submit<'a, B: command::RecordedBuffer> {
 	queue: &'a mut Queue,
-	buffer: MaybeOwned<'b, command::buffer::Recorded<'r, B>>
+	buffer: B
 }
 
-unsafe impl<'a, 'b, 'r, B: command::Buffer> task::WaitPipelineStages for Submit<'a, 'b, 'r, B> {
+unsafe impl<'a, B: command::RecordedBuffer> task::WaitPipelineStages for Submit<'a, B> {
 	type Output = ();
 	type Error = SubmitError;
-	type Payload = MaybeOwned<'b, command::buffer::Recorded<'r, B>>;
+	type Payload = B;
 
 	fn execute(
 		self,
@@ -160,8 +179,8 @@ unsafe impl<'a, 'b, 'r, B: command::Buffer> task::WaitPipelineStages for Submit<
 	}
 }
 
-impl<'a, 'b, 'r, B: command::Buffer> task::SignalSemaphore for Submit<'a, 'b, 'r, B> {}
-impl<'a, 'b, 'r, B: command::Buffer> task::SignalFence for Submit<'a, 'b, 'r, B> {}
+impl<'a, B: command::RecordedBuffer> task::SignalSemaphore for Submit<'a, B> {}
+impl<'a, B: command::RecordedBuffer> task::SignalFence for Submit<'a, B> {}
 
 pub struct Present<'a, W> {
 	queue: &'a mut Queue,
@@ -204,11 +223,4 @@ unsafe impl<'a, W> task::Wait for Present<'a, W> {
 
 		Ok((suboptimal, ()))
 	}
-}
-
-pub struct Token {
-	device: Arc<Device>,
-	handle: vk::Queue,
-	queue_family_index: u32,
-	queue_index: u32
 }

@@ -1,7 +1,8 @@
 use ash::vk;
 use std::{
 	rc::Rc,
-	sync::Arc
+	sync::Arc,
+	fmt
 };
 use crate::{
 	OomError,
@@ -98,6 +99,25 @@ impl From<vk::Result> for AcquireError {
 			vk::Result::ERROR_SURFACE_LOST_KHR => AcquireError::SurfaceLost,
 			vk::Result::ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT => AcquireError::FullScreenExclusiveModeLost,
 			_ => unreachable!()
+		}
+	}
+}
+
+impl std::error::Error for AcquireError {
+	// ...
+}
+
+impl fmt::Display for AcquireError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Self::Timeout => write!(f, "timeout"),
+			Self::NotReady => write!(f, "not ready"),
+			Self::OomError(e) => e.fmt(f),
+			Self::DeviceLost => write!(f, "device lost"),
+			Self::OutOfDate => write!(f, "swapchain out of date"),
+			Self::SurfaceLost => write!(f, "surface lost"),
+			Self::FullScreenExclusiveModeLost => write!(f, "full screen exclusive mode lost"),
+			Self::MissingDeviceExtension(e) => e.fmt(f)
 		}
 	}
 }
@@ -246,6 +266,12 @@ impl<W> DeviceOwned for Swapchain<W> {
 	}
 }
 
+/// `Acquire` payload.
+/// 
+/// This type contains a reference to the swapchain
+/// to ensure that it is not released while acquiring an image.
+pub struct Acquiring<W>(Rc<Inner<W>>);
+
 pub struct Acquire<'a, W> {
 	swapchain: &'a mut Swapchain<W>,
 	timeout: Option<u64>
@@ -254,13 +280,13 @@ pub struct Acquire<'a, W> {
 unsafe impl<'a, W> task::Task for Acquire<'a, W> {
 	type Output = (u32, bool);
 	type Error = AcquireError;
-	type Payload = ();
+	type Payload = Acquiring<W>;
 
 	fn execute(
 		self,
 		signal_semaphore: Option<&[vk::Semaphore]>,
 		signal_fence: Option<vk::Fence>,
-	) -> Result<((u32, bool), ()), AcquireError> {
+	) -> Result<((u32, bool), Acquiring<W>), AcquireError> {
 		let ext_khr_swapchain = self.swapchain.inner.device.ext_khr_swapchain()?;
 		let output = unsafe {
 				ext_khr_swapchain.acquire_next_image(
@@ -271,7 +297,7 @@ unsafe impl<'a, W> task::Task for Acquire<'a, W> {
 			)?
 		};
 
-		Ok((output, ()))
+		Ok((output, Acquiring(self.swapchain.inner.clone())))
 	}
 }
 

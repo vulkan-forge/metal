@@ -22,11 +22,11 @@ use super::Typed;
 /// Bound buffer.
 pub struct Bound {
 	inner: buffer::Unbound,
-	slot: Box<dyn Slot>
+	slot: Box<dyn Send + Slot>
 }
 
 impl Bound {
-	pub(crate) fn new<S: Slot>(inner: buffer::Unbound, slot: S) -> Self {
+	pub(crate) fn new<S: Send + Slot>(inner: buffer::Unbound, slot: S) -> Self {
 		Bound {
 			inner,
 			slot: Box::new(slot)
@@ -43,15 +43,15 @@ impl Bound {
 }
 
 unsafe impl crate::Resource for Bound {
-	fn uid(&self) -> u64 {
-		self.inner.handle().as_raw()
+	type Handle = vk::Buffer;
+
+	fn handle(&self) -> vk::Buffer {
+		self.inner.handle()
 	}
 }
 
 unsafe impl Buffer for Bound {
-	fn handle(&self) -> vk::Buffer {
-		self.inner.handle()
-	}
+	// ...
 }
 
 impl DeviceOwned for Bound {

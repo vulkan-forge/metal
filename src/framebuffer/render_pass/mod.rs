@@ -167,17 +167,13 @@ impl RenderPass {
 			None
 		}
 	}
-
-	#[inline]
-	pub(crate) fn handle(&self) -> vk::RenderPass {
-		self.handle
-	}
 }
 
 unsafe impl crate::Resource for RenderPass {
-	fn uid(&self) -> u64 {
-		use vk::Handle;
-		self.handle().as_raw()
+	type Handle = vk::RenderPass;
+
+	fn handle(&self) -> vk::RenderPass {
+		self.handle
 	}
 }
 
