@@ -61,7 +61,7 @@ pub struct Unbound {
 
 impl Unbound {
 	/// Create a raw, uninitialized buffer of the given size.
-	pub fn new<'a, U: Into<Usages>, S: Into<sync::SharingQueues>>(device: &Arc<Device>, size: u64, usage: U, sharing_queues: S) -> Result<Self, CreationError> {
+	pub fn new<U: Into<Usages>, S: Into<sync::SharingQueues>>(device: &Arc<Device>, size: u64, usage: U, sharing_queues: S) -> Result<Self, CreationError> {
 		let usage = usage.into();
 		assert!(!usage.is_empty());
 

@@ -6,6 +6,7 @@ use crate::{
 	DeviceOwned
 };
 
+#[derive(Clone)]
 pub struct SharingQueues {
 	device: Arc<Device>,
 	queues: Vec<u32>

@@ -383,6 +383,7 @@ impl<'a> Subpasses<'a> {
 	}
 }
 
+#[derive(Clone)]
 pub struct Reference {
 	render_pass: Arc<RenderPass>,
 	index: u32

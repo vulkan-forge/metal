@@ -52,7 +52,9 @@ impl SyncPool {
 	}
 
 	fn process_deallocations(&self) {
-		panic!("TODO")
+		while let Some(handle) = self.free_queue.pop() {
+			unsafe { self.raw.free(&[handle]) }
+		}
 	}
 }
 

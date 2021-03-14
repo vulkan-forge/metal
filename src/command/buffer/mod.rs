@@ -10,10 +10,10 @@ use crate::{
 };
 
 pub mod local_recorder;
-// mod recorder;
+mod recorder;
 
 pub use local_recorder::LocalRecorder;
-// pub use recorder::Recorder;
+pub use recorder::Recorder;
 
 #[derive(Debug)]
 pub enum CreationError {
@@ -53,33 +53,33 @@ pub type VulkanBuffer = vk::CommandBuffer;
 pub trait Buffer: Sized + DeviceOwned {
 	fn handle(&self) -> VulkanBuffer;
 
-	// fn record<'a, F>(self, f: F) -> Result<Recorded<'a, Self>, RecordError> where F: FnOnce(&mut Recorder<'a, Self>) -> (), Self: Send {
-	// 	let infos = vk::CommandBufferBeginInfo {
-	// 		flags: vk::CommandBufferUsageFlags::empty(), // TODO
-	// 		p_inheritance_info: std::ptr::null(), // no inheritance for primary buffers.
-	// 		..Default::default()
-	// 	};
+	fn record<'a, F>(self, f: F) -> Result<Recorded<'a, Self>, RecordError> where F: FnOnce(&mut Recorder<'a, Self>) -> (), Self: Send {
+		let infos = vk::CommandBufferBeginInfo {
+			flags: vk::CommandBufferUsageFlags::empty(), // TODO
+			p_inheritance_info: std::ptr::null(), // no inheritance for primary buffers.
+			..Default::default()
+		};
 
-	// 	unsafe {
-	// 		self.device().handle().begin_command_buffer(self.handle(), &infos)?
-	// 	}
+		unsafe {
+			self.device().handle().begin_command_buffer(self.handle(), &infos)?
+		}
 
-	// 	let mut recorder = Recorder {
-	// 		buffer: self,
-	// 		resources: HashSet::new()
-	// 	};
+		let mut recorder = Recorder {
+			buffer: self,
+			resources: HashSet::new()
+		};
 
-	// 	f(&mut recorder);
+		f(&mut recorder);
 
-	// 	unsafe {
-	// 		recorder.buffer.device().handle().end_command_buffer(recorder.buffer.handle())?
-	// 	}
+		unsafe {
+			recorder.buffer.device().handle().end_command_buffer(recorder.buffer.handle())?
+		}
 
-	// 	Ok(Recorded {
-	// 		buffer: recorder.buffer,
-	// 		resources: recorder.resources
-	// 	})
-	// }
+		Ok(Recorded {
+			buffer: recorder.buffer,
+			resources: recorder.resources
+		})
+	}
 
 	fn record_local<'a, F>(self, f: F) -> Result<LocallyRecorded<'a, Self>, RecordError> where F: FnOnce(&mut LocalRecorder<'a, Self>) -> () {
 		let infos = vk::CommandBufferBeginInfo {

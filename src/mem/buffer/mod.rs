@@ -1,3 +1,4 @@
+use std::vec::Vec as StdVec;
 use ash::vk;
 use crate::resource::Proxy;
 
@@ -6,12 +7,14 @@ mod unbound;
 mod bound;
 mod typed;
 mod index;
+mod vec;
 
 pub use usage::*;
 pub use unbound::*;
 pub use bound::*;
 pub use typed::*;
 pub use index::*;
+pub use vec::*;
 
 /// Buffer.
 pub unsafe trait Buffer: crate::Resource<Handle=vk::Buffer> {
@@ -41,15 +44,15 @@ unsafe impl<B: TypedBuffer> TypedBuffer for Proxy<B> {
 }
 
 pub struct LocalBuffers<'a> {
-	handles: Vec<vk::Buffer>,
-	resources: Vec<crate::resource::Ref<'a>>
+	handles: StdVec<vk::Buffer>,
+	resources: StdVec<crate::resource::Ref<'a>>
 }
 
 impl<'a> LocalBuffers<'a> {
 	pub fn new() -> Self {
 		Self {
-			handles: Vec::new(),
-			resources: Vec::new()
+			handles: StdVec::new(),
+			resources: StdVec::new()
 		}
 	}
 
@@ -81,15 +84,15 @@ impl<'a> IntoIterator for LocalBuffers<'a> {
 }
 
 pub struct Buffers<'a> {
-	handles: Vec<vk::Buffer>,
-	resources: Vec<crate::resource::SendRef<'a>>
+	handles: StdVec<vk::Buffer>,
+	resources: StdVec<crate::resource::SendRef<'a>>
 }
 
 impl<'a> Buffers<'a> {
 	pub fn new() -> Self {
 		Self {
-			handles: Vec::new(),
-			resources: Vec::new()
+			handles: StdVec::new(),
+			resources: StdVec::new()
 		}
 	}
 

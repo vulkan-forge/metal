@@ -146,7 +146,6 @@ pub fn main() {
 		&device,
 		&stages,
 		(), // no vertex input
-		InputAssembly::new(input_assembly::Topology::TriangleList, false),
 		None, // no tesselation
 		[Viewport::new(0.0, 0.0, dimensions.0 as f32, dimensions.1 as f32, 0.0, 1.0)],
 		[Scissor::new(0, 0, dimensions.0, dimensions.1)],
@@ -351,7 +350,7 @@ impl<W: 'static> Renderer<W> {
 					&[ClearValue::f32color(0.0, 0.0, 0.0, 1.0)]
 				);
 
-				render_pass.draw(&pipeline, (), (), 3, 1, 0, 0);
+				render_pass.bind_pipeline(&pipeline).draw((), (), 3, 1, 0, 0);
 			}).expect("unable to record command buffer")
 		}).collect();
 	

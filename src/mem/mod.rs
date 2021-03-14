@@ -8,6 +8,7 @@ use crate::{
 
 pub mod buffer;
 mod memory_requirements;
+pub mod staging;
 
 pub use buffer::{
 	Buffer,
@@ -50,10 +51,13 @@ pub unsafe trait Allocator: 'static + DeviceOwned {
 	/// The typical scenario for this is a loading sequence.
 	/// You can build your buffers and images, prepare each allocation and register them in a stack.
 	/// Once all allocations are prepared, use `allocate` for each item of the stack.
-	fn prepare(&mut self, memory_requirements: MemoryRequirements);
+	fn prepare(&self, memory_requirements: MemoryRequirements);
 
 	/// Allocate some memory.
-	fn allocate(&mut self, memory_requirements: MemoryRequirements) -> Result<Self::Slot, Error>;
+	fn allocate(&self, memory_requirements: MemoryRequirements) -> Result<Self::Slot, Error>;
+
+	/// Reallocate host-visible memory.
+	fn reallocate(&self, slot: HostVisible<Self::Slot>, memory_requirements: MemoryRequirements) -> Result<HostVisible<Self::Slot>, Error>;
 }
 
 pub unsafe trait Slot: 'static {
@@ -81,6 +85,11 @@ impl<S: Slot> HostVisible<S> {
 	#[inline]
 	pub fn ptr(&self) -> *mut c_void {
 		self.0.ptr().unwrap()
+	}
+
+	#[inline]
+	pub fn unwrap(self) -> S {
+		self.0
 	}
 }
 

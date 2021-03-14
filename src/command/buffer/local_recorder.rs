@@ -13,7 +13,11 @@ use crate::{
 	framebuffer,
 	Framebuffer,
 	Image,
-	pipeline,
+	pipeline::{
+		self,
+		vertex_input::VertexInput,
+		input_assembly::InputAssembly
+	},
 	format,
 	mem
 };
@@ -28,13 +32,13 @@ pub struct LocalRecorder<'a, B: Buffer> {
 }
 
 impl<'a, B: Buffer> LocalRecorder<'a, B> {
-	pub fn begin_render_pass<'r, I: Image + 'static>(
+	pub fn begin_render_pass<'r, I: Image + 'static, C: pipeline::layout::PushConstants>(
 		&'r mut self,
 		render_pass: &Arc<framebuffer::RenderPass>,
 		framebuffer: &Arc<Framebuffer<I>>,
 		(x, y, width, height): (i32, i32, u32, u32),
 		clear_values: &[format::ClearValue]
-	) -> RenderPass<'r, 'a, B, pipeline::layout::Empty> {
+	) -> RenderPass<'r, 'a, B, pipeline::layout::NoSets<C>> {
 		let infos = vk::RenderPassBeginInfo {
 			render_pass: render_pass.handle(),
 			framebuffer: framebuffer.handle(),
@@ -87,6 +91,29 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 }
 
 impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
+	pub fn bind_pipeline<'p, P>(
+		&'p mut self,
+		pipeline: &Arc<P>
+	) -> Pipeline<'p, 'a, B, L, P>
+	where
+		P: pipeline::GraphicsPipeline,
+		P::Layout: pipeline::layout::CompatibleWith<L>,
+	{
+		unsafe {
+			self.recorder.buffer.device().handle().cmd_bind_pipeline(
+				self.recorder.buffer.handle(),
+				vk::PipelineBindPoint::GRAPHICS,
+				pipeline.handle()
+			);
+		}
+
+		Pipeline {
+			recorder: self.recorder,
+			active_layout: PhantomData,
+			active_pipeline: pipeline.clone()
+		}
+	}
+
 	pub fn bind_descriptor_sets<M, T>(
 		self,
 		layout: M,
@@ -116,10 +143,26 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 			active_layout: PhantomData
 		}
 	}
+}
 
-	pub fn draw<P, C, V>(
+impl<'r, 'a, B: Buffer, L: pipeline::Layout> Drop for RenderPass<'r, 'a, B, L> {
+	fn drop(&mut self) {
+		unsafe {
+			self.recorder.buffer.device().handle().cmd_end_render_pass(self.recorder.buffer.handle())
+		}
+	}
+}
+
+/// Record pipeline commands.
+pub struct Pipeline<'r, 'a, B: Buffer, L: pipeline::Layout, P: pipeline::GraphicsPipeline> {
+	recorder: &'r mut LocalRecorder<'a, B>,
+	active_layout: PhantomData<L>,
+	active_pipeline: Arc<P>
+}
+
+impl<'r, 'a, B: Buffer, L: pipeline::Layout, P: pipeline::GraphicsPipeline> Pipeline<'r, 'a, B, L, P> {
+	pub fn draw<C, V>(
 		&mut self,
-		pipeline: &Arc<P>,
 		push_constants: C,
 		vertex_input: V,
 		vertex_count: u32,
@@ -127,22 +170,14 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 		first_vertex: u32,
 		first_instance: u32
 	) where
-		P: pipeline::GraphicsPipeline,
-		P::Layout: pipeline::layout::CompatibleWith<L>,
 		C: pipeline::layout::push_constant::Setter<<P::Layout as pipeline::Layout>::PushConstants>,
 		V: pipeline::vertex_input::Bind<'a, P::VertexInput>
 	{
 		unsafe {
-			self.recorder.buffer.device().handle().cmd_bind_pipeline(
-				self.recorder.buffer.handle(),
-				vk::PipelineBindPoint::GRAPHICS,
-				pipeline.handle()
-			);
-
-			for (range, data) in push_constants.ranges() {
+			for (range, data) in push_constants.ranges().as_ref() {
 				self.recorder.buffer.device().handle().cmd_push_constants(
 					self.recorder.buffer.handle(),
-					pipeline.layout().handle(),
+					self.active_pipeline.layout().handle(),
 					range.0.stage_flags,
 					range.0.offset,
 					std::slice::from_raw_parts(*data, range.0.size as usize)
@@ -169,9 +204,12 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 		}
 	}
 
-	pub fn draw_indexed<P, C, V, I>(
+	/// Note: when using list topologies (`PointList`, `LineList` and `TriangleList`), 
+	/// `index_count` is the number of element in that list (the number of points/lines/faces).
+	/// For instance, if the topology is `TriangleList`,
+	/// then `index_count` must be the number of input indexes divided by 3.
+	pub fn draw_indexed<C, V, I>(
 		&mut self,
-		pipeline: &Arc<P>,
 		push_constants: C,
 		vertex_input: V,
 		index_buffer: I,
@@ -182,23 +220,15 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 		vertex_offset: i32,
 		first_instance: u32
 	) where
-		P: pipeline::GraphicsPipeline,
-		P::Layout: pipeline::layout::CompatibleWith<L>,
 		C: pipeline::layout::push_constant::Setter<<P::Layout as pipeline::Layout>::PushConstants>,
 		V: pipeline::vertex_input::Bind<'a, P::VertexInput>,
-		I: 'a + mem::IndexBuffer,
+		I: 'a + mem::IndexBuffer<<<P::VertexInput as VertexInput>::Assembly as InputAssembly>::Topology>,
 	{
 		unsafe {
-			self.recorder.buffer.device().handle().cmd_bind_pipeline(
-				self.recorder.buffer.handle(),
-				vk::PipelineBindPoint::GRAPHICS,
-				pipeline.handle()
-			);
-
-			for (range, data) in push_constants.ranges() {
+			for (range, data) in push_constants.ranges().as_ref() {
 				self.recorder.buffer.device().handle().cmd_push_constants(
 					self.recorder.buffer.handle(),
-					pipeline.layout().handle(),
+					self.active_pipeline.layout().handle(),
 					range.0.stage_flags,
 					range.0.offset,
 					std::slice::from_raw_parts(*data, range.0.size as usize)
@@ -224,20 +254,12 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 
 			self.recorder.buffer.device().handle().cmd_draw_indexed(
 				self.recorder.buffer.handle(),
-				index_count,
+				index_count * index_buffer.index_per_item(),
 				instance_count,
 				first_index,
 				vertex_offset,
 				first_instance
 			)
-		}
-	}
-}
-
-impl<'r, 'a, B: Buffer, L: pipeline::Layout> Drop for RenderPass<'r, 'a, B, L> {
-	fn drop(&mut self) {
-		unsafe {
-			self.recorder.buffer.device().handle().cmd_end_render_pass(self.recorder.buffer.handle())
 		}
 	}
 }

@@ -1,5 +1,9 @@
 use ash::vk;
 use crate::Format;
+use super::{
+	input_assembly,
+	InputAssembly
+};
 
 #[derive(Clone, Copy, Debug)]
 #[repr(i32)]
@@ -13,7 +17,7 @@ pub enum Rate {
 
 impl Rate {
 	#[inline]
-	pub(crate) fn into_vulkan(self) -> vk::VertexInputRate {
+	pub(crate) const fn into_vulkan(self) -> vk::VertexInputRate {
 		vk::VertexInputRate::from_raw(self as i32)
 	}
 }
@@ -22,7 +26,7 @@ impl Rate {
 pub struct Binding(vk::VertexInputBindingDescription); // This MUST be homomorphic to `vk::VertexInputBindingDescription`.
 
 impl Binding {
-	pub fn new(binding: u32, stride: u32, input_rate: Rate) -> Binding {
+	pub const fn new(binding: u32, stride: u32, input_rate: Rate) -> Binding {
 		Binding(vk::VertexInputBindingDescription {
 			binding,
 			stride,
@@ -35,7 +39,7 @@ impl Binding {
 pub struct Attribute(vk::VertexInputAttributeDescription); // This MUST be homomorphic to `vk::VertexInputAttributeDescription`.
 
 impl Attribute {
-	pub fn new(location: u32, binding: u32, format: Format, offset: u32) -> Attribute {
+	pub const fn new(location: u32, binding: u32, format: Format, offset: u32) -> Attribute {
 		Attribute(vk::VertexInputAttributeDescription {
 			location,
 			binding,
@@ -60,12 +64,16 @@ unsafe impl<'a> Bind<'a, ()> for () {
 }
 
 pub unsafe trait VertexInput: 'static {
+	type Assembly: InputAssembly;
+
 	fn bindings(&self) -> &[Binding];
 
 	fn attributes(&self) -> &[Attribute];
 }
 
 unsafe impl VertexInput for () {
+	type Assembly = input_assembly::PointList;
+
 	fn bindings(&self) -> &[Binding] {
 		&[]
 	}

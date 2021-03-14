@@ -6,7 +6,9 @@ pub unsafe trait PushConstants {
 }
 
 pub unsafe trait Setter<C: PushConstants> {
-	fn ranges(&self) -> &[(Range, *const u8)];
+	type Ranges<'a>: AsRef<[(Range, *const u8)]>;
+
+	fn ranges<'a>(&'a self) -> Self::Ranges<'a>;
 }
 
 unsafe impl PushConstants for () {
@@ -14,8 +16,10 @@ unsafe impl PushConstants for () {
 }
 
 unsafe impl Setter<()> for () {
-	fn ranges(&self) -> &[(Range, *const u8)] {
-		&[]
+	type Ranges<'a> = [(Range, *const u8); 0];
+
+	fn ranges(&self) -> [(Range, *const u8); 0] {
+		[]
 	}
 }
 

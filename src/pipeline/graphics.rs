@@ -72,7 +72,6 @@ impl<L: Layout, I: VertexInput, D: DynamicStates> Graphics<L, I, D> {
 		device: &Arc<Device>,
 		stages: &S,
 		vertex_input: I,
-		input_assembly: InputAssembly,
 		tesselation: Option<Tesselation>,
 		viewports: [Viewport; V],
 		scissors: [Scissor; V],
@@ -142,7 +141,7 @@ impl<L: Layout, I: VertexInput, D: DynamicStates> Graphics<L, I, D> {
 			p_stages: vk_stages.as_ptr(),
 			//
 			p_vertex_input_state: &vertex_input_state,
-			p_input_assembly_state: input_assembly.as_vulkan(),
+			p_input_assembly_state: &I::Assembly::vulkan(),
 			p_tessellation_state: tesselation.as_ref().map(|t| t.as_vulkan() as *const _).unwrap_or(std::ptr::null()),
 			//
 			p_viewport_state: &viewport_state,

@@ -37,7 +37,7 @@ macro_rules! formats {
 			/// For block based formats this will be the size of a single block.
 			/// Returns `None` if the size is irrelevant.
 			#[inline]
-			pub fn size(&self) -> Option<usize> {
+			pub const fn size(&self) -> Option<usize> {
 				match *self {
 					$(
 						Format::$name => $sz,
@@ -48,7 +48,7 @@ macro_rules! formats {
 			/// Returns (width, heigh) of the dimensions for block based formats.
 			/// For non block formats will return (1,1)
 			#[inline]
-			pub fn block_dimensions(&self) -> (u32, u32) {
+			pub const fn block_dimensions(&self) -> (u32, u32) {
 				match *self {
 					$(
 						Format::$name => $bdim,
@@ -57,7 +57,7 @@ macro_rules! formats {
 			}
 
 			/// Returns the `Format` corresponding to a Vulkan constant.
-			pub(crate) fn from_vulkan(val: vk::Format) -> Option<Format> {
+			pub(crate) const fn from_vulkan(val: vk::Format) -> Option<Format> {
 				match val {
 					$(
 						vk::Format::$vk => Some(Format::$name),
@@ -67,7 +67,7 @@ macro_rules! formats {
 			}
 
 			/// Returns the Vulkan constant corresponding to the `Format`.
-			pub(crate) fn into_vulkan(self) -> vk::Format {
+			pub(crate) const fn into_vulkan(self) -> vk::Format {
 				vk::Format::from_raw(self as i32)
 			}
 

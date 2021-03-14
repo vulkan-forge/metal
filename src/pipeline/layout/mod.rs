@@ -79,6 +79,9 @@ pub unsafe trait CompatibleWith<L>: Layout {
 /// The `NoSets` layout is compatible with any layout with identical push constant ranges.
 unsafe impl<P: PushConstants, L: Layout<PushConstants=P>> CompatibleWith<L> for NoSets<P> {}
 
+/// The `NoSets` layout is compatible with any layout with identical push constant ranges.
+unsafe impl<N: std::ops::Deref<Target=NoSets<P>>, P: PushConstants, L: Layout<PushConstants=P>> CompatibleWith<L> for N {}
+
 pub struct Raw<C: PushConstants> {
 	device: Arc<Device>,
 	handle: vk::PipelineLayout,

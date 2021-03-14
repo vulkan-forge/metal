@@ -5,7 +5,8 @@ use ash::{
 use std::sync::Arc;
 use crate::{
 	OomError,
-	Device
+	Device,
+	DeviceOwned
 };
 
 pub mod subpass;
@@ -166,6 +167,12 @@ impl RenderPass {
 		} else {
 			None
 		}
+	}
+}
+
+impl DeviceOwned for RenderPass {
+	fn device(&self) -> &Arc<Device> {
+		&self.device
 	}
 }
 
