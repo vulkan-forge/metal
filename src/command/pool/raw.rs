@@ -32,6 +32,7 @@ impl Raw {
 		
 		let infos = vk::CommandPoolCreateInfo {
 			queue_family_index: queue_family.index(),
+			flags: vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER, // TODO
 			..Default::default()
 		};
 

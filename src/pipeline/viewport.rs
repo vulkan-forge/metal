@@ -1,6 +1,8 @@
+use std::fmt;
 use ash::vk;
 
-pub struct Viewport(vk::Viewport); // This MUST be homomorphic with `vk::Viewport`
+#[repr(transparent)]
+pub struct Viewport(vk::Viewport);
 
 impl Viewport {
 	pub fn new(
@@ -50,5 +52,11 @@ impl Viewport {
 impl Default for Viewport {
 	fn default() -> Self {
 		Self::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+	}
+}
+
+impl fmt::Display for Viewport {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "(x={}, y={}, width={}, height={})", self.x(), self.y(), self.width(), self.height())
 	}
 }

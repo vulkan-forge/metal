@@ -14,7 +14,7 @@ pub struct SharingQueues {
 
 impl SharingQueues {
 	pub(crate) fn as_vulkan(&self) -> (vk::SharingMode, u32, *const u32) {
-		if self.queues.len() > 1 {
+		if self.queues.len() <= 1 {
 			(vk::SharingMode::EXCLUSIVE, 0, std::ptr::null())
 		} else {
 			(vk::SharingMode::CONCURRENT, self.queues.len() as u32, self.queues.as_ptr())
@@ -36,16 +36,16 @@ impl SharingQueues {
 	}
 }
 
-impl<'a> From<&'a device::Queue> for SharingQueues {
-	fn from(queue: &'a device::Queue) -> Self {
-		SharingQueues {
-			device: queue.device().clone(),
-			queues: vec![queue.index()]
-		}
-	}
-}
+// impl<Q: std::ops::Deref<Target=device::Queue>> From<Q> for SharingQueues {
+// 	fn from(queue: Q) -> Self {
+// 		SharingQueues {
+// 			device: queue.device().clone(),
+// 			queues: vec![queue.index()]
+// 		}
+// 	}
+// }
 
-impl<'a, I: IntoIterator<Item=&'a device::Queue>> From<I> for SharingQueues {
+impl<'a, I: IntoIterator> From<I> for SharingQueues where I::Item: std::ops::Deref<Target=device::Queue> {
 	fn from(it: I) -> Self {
 		let mut device = None;
 

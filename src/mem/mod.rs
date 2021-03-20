@@ -1,5 +1,6 @@
 use std::{
-	ffi::c_void
+	ffi::c_void,
+	fmt
 };
 use crate::{
 	DeviceOwned,
@@ -24,6 +25,26 @@ pub enum Error {
 	OutOfMemory,
 	Map(device::memory::MapError),
 	Allocation(device::AllocationError)
+}
+
+impl fmt::Display for Error {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Error::OutOfMemory => write!(f, "out of memory."),
+			Error::Map(e) => write!(f, "map error: {}", e),
+			Error::Allocation(e) => write!(f, "allocation error: {}", e)
+		}
+	}
+}
+
+impl std::error::Error for Error {
+	fn source(&self) -> Option<&(dyn 'static + std::error::Error)> {
+		match self {
+			Error::OutOfMemory => None,
+			Error::Map(e) => Some(e),
+			Error::Allocation(e) => Some(e)
+		}
+	}
 }
 
 impl From<device::memory::MapError> for Error {
@@ -60,6 +81,24 @@ pub unsafe trait Allocator: 'static + DeviceOwned {
 	fn reallocate(&self, slot: HostVisible<Self::Slot>, memory_requirements: MemoryRequirements) -> Result<HostVisible<Self::Slot>, Error>;
 }
 
+unsafe impl<A: 'static + std::ops::Deref + DeviceOwned> Allocator for A where A::Target: Allocator {
+	type Slot = <A::Target as Allocator>::Slot;
+
+	fn prepare(&self, memory_requirements: MemoryRequirements) {
+		std::ops::Deref::deref(self).prepare(memory_requirements)
+	}
+
+	/// Allocate some memory.
+	fn allocate(&self, memory_requirements: MemoryRequirements) -> Result<Self::Slot, Error> {
+		std::ops::Deref::deref(self).allocate(memory_requirements)
+	}
+
+	/// Reallocate host-visible memory.
+	fn reallocate(&self, slot: HostVisible<Self::Slot>, memory_requirements: MemoryRequirements) -> Result<HostVisible<Self::Slot>, Error> {
+		std::ops::Deref::deref(self).reallocate(slot, memory_requirements)
+	}
+}
+
 pub unsafe trait Slot: 'static {
 	fn memory(&self) -> &device::Memory;
 
@@ -68,6 +107,24 @@ pub unsafe trait Slot: 'static {
 	fn size(&self) -> u64;
 
 	fn ptr(&self) -> Option<*mut c_void>;
+}
+
+unsafe impl<S: 'static + Slot + ?Sized> Slot for Box<S> {
+	fn memory(&self) -> &device::Memory {
+		self.as_ref().memory()
+	}
+
+	fn offset(&self) -> u64 {
+		self.as_ref().offset()
+	}
+
+	fn size(&self) -> u64 {
+		self.as_ref().size()
+	}
+
+	fn ptr(&self) -> Option<*mut c_void> {
+		self.as_ref().ptr()
+	}
 }
 
 pub struct HostVisible<S: Slot>(S);

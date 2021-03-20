@@ -72,7 +72,7 @@ pub unsafe trait VertexInput: 'static {
 }
 
 unsafe impl VertexInput for () {
-	type Assembly = input_assembly::PointList;
+	type Assembly = input_assembly::TriangleList;
 
 	fn bindings(&self) -> &[Binding] {
 		&[]

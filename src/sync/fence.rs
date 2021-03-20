@@ -113,7 +113,7 @@ pub trait Fence: DeviceOwned {
 	}
 
 	/// Reset the fence.
-	fn reset(&self) -> Result<(), OomError> {
+	fn reset(&mut self) -> Result<(), OomError> {
 		unsafe {
 			self.device().handle().reset_fences(std::slice::from_ref(self.handle()))?
 		}

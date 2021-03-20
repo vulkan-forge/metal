@@ -350,7 +350,7 @@ impl<W: 'static> Renderer<W> {
 					&[ClearValue::f32color(0.0, 0.0, 0.0, 1.0)]
 				);
 
-				render_pass.bind_pipeline(&pipeline).draw((), (), 3, 1, 0, 0);
+				render_pass.bind_pipeline(&pipeline, ()).draw((), (), 3, 1, 0, 0);
 			}).expect("unable to record command buffer")
 		}).collect();
 	

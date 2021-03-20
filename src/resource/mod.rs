@@ -29,10 +29,6 @@ pub unsafe trait Resource {
 	type Handle: Copy + Handle;
 
 	fn handle(&self) -> Self::Handle;
-
-	fn proxy(self: &Arc<Self>) -> Proxy<Self> {
-		Proxy::new(self)
-	}
 }
 
 unsafe impl<B: std::ops::Deref> Resource for B where B::Target: Resource {

@@ -1,6 +1,8 @@
+use std::fmt;
 use ash::vk;
 
-pub struct Scissor(vk::Rect2D); // This MUST be homomorphic with `vk::Rect2D`
+#[repr(transparent)]
+pub struct Scissor(vk::Rect2D);
 
 impl Scissor {
 	pub fn new(
@@ -43,5 +45,11 @@ impl Scissor {
 impl Default for Scissor {
 	fn default() -> Self {
 		Self::new(0, 0, 0, 0)
+	}
+}
+
+impl fmt::Display for Scissor {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "(x={}, y={}, width={}, height={})", self.x(), self.y(), self.width(), self.height())
 	}
 }

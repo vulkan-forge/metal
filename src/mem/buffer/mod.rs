@@ -7,14 +7,14 @@ mod unbound;
 mod bound;
 mod typed;
 mod index;
-mod vec;
+pub mod vec;
 
 pub use usage::*;
 pub use unbound::*;
 pub use bound::*;
 pub use typed::*;
 pub use index::*;
-pub use vec::*;
+pub use vec::Vec;
 
 /// Buffer.
 pub unsafe trait Buffer: crate::Resource<Handle=vk::Buffer> {

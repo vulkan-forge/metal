@@ -54,6 +54,7 @@ pub enum CreationError {
 	MissingExtension(Extension),
 	MissingFeature(Feature),
 	TooManyObjets,
+	TooManyQueuesForFamily(u32, u32),
 	DeviceLost
 }
 
@@ -71,6 +72,7 @@ impl fmt::Display for CreationError {
 			MissingExtension(e) => write!(f, "missing device extension `{}`", e),
 			MissingFeature(t) => write!(f, "missing device feature `{}`", t),
 			TooManyObjets => write!(f, "too many objets"),
+			TooManyQueuesForFamily(index, max) => write!(f, "too many queues (>= {}) for the same queue family ({})", max, index),
 			DeviceLost => write!(f, "device lost")
 		}
 	}
@@ -96,6 +98,25 @@ pub enum AllocationError {
 	OutOfMemory(OomError),
 	InvalidExternalHandle,
 	InvalidOpaqueCaptureAddress
+}
+
+impl fmt::Display for AllocationError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Self::OutOfMemory(e) => e.fmt(f),
+			Self::InvalidExternalHandle => write!(f, "invalid external handle"),
+			Self::InvalidOpaqueCaptureAddress => write!(f, "invalid opaque capture address")
+		}
+	}
+}
+
+impl std::error::Error for AllocationError {
+	fn source(&self) -> Option<&(dyn 'static + std::error::Error)> {
+		match self {
+			Self::OutOfMemory(e) => Some(e),
+			_ => None
+		}
+	}
 }
 
 impl From<vk::Result> for AllocationError {
@@ -147,13 +168,17 @@ impl Device {
 				return Err(CreationError::InvalidQueuePriority(priority))
 			}
 
-			let mut family_requested_queues = &mut requested_queues_by_family[queue_family.index() as usize];
+			let family_requested_queues = &mut requested_queues_by_family[queue_family.index() as usize];
 
 			queues_index_iter.push((queue_family.index(), family_requested_queues.len() as u32));
 			family_requested_queues.push(priority);
+
+			if family_requested_queues.len() > queue_family.queue_count() as usize {
+				return Err(CreationError::TooManyQueuesForFamily(queue_family.index(), queue_family.queue_count()))
+			}
 		}
 
-		let mut queue_create_infos: Vec<_> = requested_queues_by_family.iter().enumerate().filter_map(|(queue_family_index, priorities)| {
+		let queue_create_infos: Vec<_> = requested_queues_by_family.iter().enumerate().filter_map(|(queue_family_index, priorities)| {
 			if priorities.is_empty() {
 				None
 			} else {
@@ -270,6 +295,12 @@ impl<'a, T: ?Sized + DeviceOwned> DeviceOwned for &'a T {
 }
 
 impl<'a, T: ?Sized + DeviceOwned> DeviceOwned for std::rc::Rc<T> {
+	fn device(&self) -> &Arc<Device> {
+		(**self).device()
+	}
+}
+
+impl<'a, T: ?Sized + DeviceOwned> DeviceOwned for Arc<T> {
 	fn device(&self) -> &Arc<Device> {
 		(**self).device()
 	}

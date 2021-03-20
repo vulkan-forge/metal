@@ -14,6 +14,7 @@ use crate::{
 	sync::{
 		self,
 		task,
+		SharingQueues
 	}
 };
 
@@ -135,7 +136,7 @@ pub struct Swapchain<W> {
 }
 
 impl<W> Swapchain<W> {
-	pub fn new<'a, S: IntoIterator<Item=&'a device::Queue>>(
+	pub fn new<'a, S: Into<SharingQueues>>(
 		device: &Arc<Device>,
 		surface: &Arc<Surface<W>>,
 		num_images: u32,
@@ -172,15 +173,18 @@ impl<W> Swapchain<W> {
 			(extent[0], extent[1])
 		};
 
-		let mut ids: Vec<u32> = sharing_queues.into_iter().map(|q| q.family_index()).collect();
-		ids.sort();
-		ids.dedup();
+		// let mut ids: Vec<u32> = sharing_queues.into_iter().map(|q| q.family_index()).collect();
+		// ids.sort();
+		// ids.dedup();
 
-		let (sh_mode, sh_count, sh_indices) = if ids.len() > 1 {
-			(vk::SharingMode::EXCLUSIVE, 0, std::ptr::null())
-		} else {
-			(vk::SharingMode::CONCURRENT, ids.len() as u32, ids.as_ptr())
-		};
+		// let (sh_mode, sh_count, sh_indices) = if ids.len() <= 1 {
+		// 	(vk::SharingMode::EXCLUSIVE, 0, std::ptr::null())
+		// } else {
+		// 	(vk::SharingMode::CONCURRENT, ids.len() as u32, ids.as_ptr())
+		// };
+
+		let sharing_queues = sharing_queues.into();
+		let (sh_mode, sh_count, sh_indices) = sharing_queues.as_vulkan();
 
 		let infos = vk::SwapchainCreateInfoKHR {
 			surface: surface.handle(),

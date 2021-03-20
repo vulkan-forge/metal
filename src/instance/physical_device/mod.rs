@@ -1,6 +1,10 @@
 use std::{
 	sync::Arc,
-	ffi::CStr
+	ffi::CStr,
+	hash::{
+		Hash,
+		Hasher
+	}
 };
 use ash::{
 	vk,
@@ -105,5 +109,17 @@ impl<'a> PhysicalDevice<'a> {
 
 	pub fn limits(&self) -> Limits<'a> {
 		Limits::from_vk_limits(&self.p.properties.limits)
+	}
+}
+
+impl<'a> PartialEq for PhysicalDevice<'a> {
+	fn eq(&self, other: &Self) -> bool {
+		self.index() == other.index() && Arc::ptr_eq(self.instance(), other.instance())
+	}
+}
+
+impl<'a> Hash for PhysicalDevice<'a> {
+	fn hash<H: Hasher>(&self, h: &mut H) {
+		self.index().hash(h);
 	}
 }

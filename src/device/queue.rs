@@ -1,5 +1,7 @@
-use std::sync::Arc;
-use maybe_owned::MaybeOwned;
+use std::{
+	sync::Arc
+};
+use parking_lot::Mutex;
 use ash::{
 	vk,
 	version::DeviceV1_0
@@ -90,7 +92,7 @@ impl fmt::Display for PresentError {
 /// Device queue.
 pub struct Queue {
 	device: Arc<Device>,
-	handle: vk::Queue,
+	handle: Mutex<vk::Queue>,
 	queue_family_index: u32,
 	queue_index: u32
 }
@@ -99,7 +101,7 @@ impl Queue {
 	pub(crate) fn new(device: &Arc<Device>, handle: vk::Queue, queue_family_index: u32, queue_index: u32) -> Queue {
 		Queue {
 			device: device.clone(),
-			handle,
+			handle: Mutex::new(handle),
 			queue_family_index,
 			queue_index
 		}
@@ -117,7 +119,7 @@ impl Queue {
 		self.device.physical_device().queue_family(self.queue_family_index).unwrap()
 	}
 
-	pub fn submit<'a, B: 'a + command::RecordedBuffer>(&'a mut self, buffer: B) -> Submit<'a, B> {
+	pub fn submit<'a, B: 'a + command::RecordedBuffer>(&'a self, buffer: B) -> Submit<'a, B> {
 		// TODO check inner buffer queue access.
 
 		Submit {
@@ -126,7 +128,7 @@ impl Queue {
 		}
 	}
 
-	pub fn present<'a, W>(&'a mut self, swapchain: &'a crate::Swapchain<W>, index: u32) -> Present<'a, W> {
+	pub fn present<'a, W>(&'a self, swapchain: &'a crate::Swapchain<W>, index: u32) -> Present<'a, W> {
 		Present {
 			queue: self,
 			swapchain,
@@ -142,7 +144,7 @@ impl DeviceOwned for Queue {
 }
 
 pub struct Submit<'a, B: command::RecordedBuffer> {
-	queue: &'a mut Queue,
+	queue: &'a Queue,
 	buffer: B
 }
 
@@ -172,7 +174,8 @@ unsafe impl<'a, B: command::RecordedBuffer> task::WaitPipelineStages for Submit<
 		};
 
 		unsafe {
-			self.queue.device.handle().queue_submit(self.queue.handle, &[infos], signal_fence.unwrap_or(vk::Fence::null()))?;
+			let handle = self.queue.handle.lock();
+			self.queue.device.handle().queue_submit(*handle, &[infos], signal_fence.unwrap_or(vk::Fence::null()))?;
 		}
 
 		Ok(((), self.buffer))
@@ -183,7 +186,7 @@ impl<'a, B: command::RecordedBuffer> task::SignalSemaphore for Submit<'a, B> {}
 impl<'a, B: command::RecordedBuffer> task::SignalFence for Submit<'a, B> {}
 
 pub struct Present<'a, W> {
-	queue: &'a mut Queue,
+	queue: &'a Queue,
 	swapchain: &'a crate::Swapchain<W>,
 	index: u32
 }
@@ -214,7 +217,8 @@ unsafe impl<'a, W> task::Wait for Present<'a, W> {
 		};
 
 		let suboptimal = unsafe {
-			ext_khr_swapchain.queue_present(self.queue.handle, &infos)?
+			let handle = self.queue.handle.lock();
+			ext_khr_swapchain.queue_present(*handle, &infos)?
 		};
 
 		if result != vk::Result::SUCCESS {

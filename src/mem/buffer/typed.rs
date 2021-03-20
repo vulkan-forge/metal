@@ -29,7 +29,7 @@ pub struct Typed<T> {
 }
 
 impl<T> Typed<T> {
-	pub(crate) fn from_raw_parts(inner: buffer::Unbound, slot: Box<dyn Send + Slot>) -> Self {
+	pub(crate) unsafe fn from_raw_parts(inner: buffer::Unbound, slot: Box<dyn Send + Slot>) -> Self {
 		let len = inner.len() / std::mem::size_of::<T>() as u64;
 		Self {
 			inner,

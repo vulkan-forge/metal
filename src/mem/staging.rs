@@ -10,12 +10,19 @@ use super::{
 };
 
 /// Allocator only allocating memory to host visible memory.
+#[derive(Clone)]
 pub struct Allocator<A: super::Allocator> {
 	/// Underlying allocator.
 	allocator: A
 }
 
 impl<A: super::Allocator> Allocator<A> {
+	pub fn new(allocator: A) -> Self {
+		Self {
+			allocator
+		}
+	}
+
 	pub fn filtered_memory_requirements(&self, memory_requirements: MemoryRequirements) -> MemoryRequirements {
 		memory_requirements.filter_memory_types(self.device().physical_device(), |memory_type| memory_type.is_host_visible())
 	}

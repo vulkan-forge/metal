@@ -20,29 +20,41 @@ use crate::{
 use super::Typed;
 
 /// Bound buffer.
-pub struct Bound {
+pub struct Bound<S: Slot> {
 	inner: buffer::Unbound,
-	slot: Box<dyn Send + Slot>
+	slot: S
 }
 
-impl Bound {
-	pub(crate) fn new<S: Send + Slot>(inner: buffer::Unbound, slot: S) -> Self {
+impl<S: Slot> Bound<S> {
+	pub(crate) fn new(inner: buffer::Unbound, slot: S) -> Self {
 		Bound {
 			inner,
-			slot: Box::new(slot)
+			slot
 		}
 	}
 
-	pub fn memory_slot(&self) -> &dyn Slot {
-		self.slot.as_ref()
+	pub fn memory_slot(&self) -> &S {
+		&self.slot
 	}
 
-	pub unsafe fn into_typed<T>(self) -> Typed<T> {
-		Typed::from_raw_parts(self.inner, self.slot)
+	/// Releases the buffer and returns its memory slot.
+	pub fn unbind(self) -> S {
+		self.slot
+	}
+
+	pub unsafe fn into_typed<T>(self) -> Typed<T> where S: Send {
+		Typed::from_raw_parts(self.inner, Box::new(self.slot))
+	}
+
+	pub fn boxed(self) -> Bound<Box<dyn Send + Slot>> where S: Send {
+		Bound {
+			inner: self.inner,
+			slot: Box::new(self.slot)
+		}
 	}
 }
 
-unsafe impl crate::Resource for Bound {
+unsafe impl<S: Slot> crate::Resource for Bound<S> {
 	type Handle = vk::Buffer;
 
 	fn handle(&self) -> vk::Buffer {
@@ -50,11 +62,11 @@ unsafe impl crate::Resource for Bound {
 	}
 }
 
-unsafe impl Buffer for Bound {
+unsafe impl<S: Slot> Buffer for Bound<S> {
 	// ...
 }
 
-impl DeviceOwned for Bound {
+impl<S: Slot> DeviceOwned for Bound<S> {
 	fn device(&self) -> &Arc<Device> {
 		self.inner.device()
 	}

@@ -59,30 +59,36 @@ pub trait DynamicState {
 	const IS_DYNAMIC: bool;
 }
 
-pub mod viewport {
-	pub struct Static;
+pub unsafe trait Set<S: DynamicStates> {
+	fn viewports(&self) -> Option<&[super::Viewport]>;
 
-	impl super::DynamicState for Static {
+	fn scissors(&self) -> Option<&[super::Scissor]>;
+}
+
+pub mod viewport {
+	pub struct Static<const N: usize>;
+
+	impl<const N: usize> super::DynamicState for Static<N> {
 		const IS_DYNAMIC: bool = false;
 	}
 
-	pub struct Dynamic;
+	pub struct Dynamic<const N: usize>;
 
-	impl super::DynamicState for Dynamic {
+	impl<const N: usize> super::DynamicState for Dynamic<N> {
 		const IS_DYNAMIC: bool = true;
 	}
 }
 
 pub mod scissor {
-	pub struct Static;
+	pub struct Static<const N: usize>;
 
-	impl super::DynamicState for Static {
+	impl<const N: usize> super::DynamicState for Static<N> {
 		const IS_DYNAMIC: bool = false;
 	}
 
-	pub struct Dynamic;
+	pub struct Dynamic<const N: usize>;
 
-	impl super::DynamicState for Dynamic {
+	impl<const N: usize> super::DynamicState for Dynamic<N> {
 		const IS_DYNAMIC: bool = true;
 	}
 }
@@ -186,8 +192,8 @@ pub mod stencil_reference {
 }
 
 impl DynamicStates for () {
-	type Viewport = viewport::Static;
-	type Scissor = scissor::Static;
+	type Viewport = viewport::Static<1>;
+	type Scissor = scissor::Static<1>;
 	type LineWidth = line_width::Static;
 	type DepthBias = depth_bias::Static;
 	type BlendConstants = blend_constants::Static;
@@ -197,11 +203,21 @@ impl DynamicStates for () {
 	type StencilReference = stencil_reference::Static;
 }
 
-pub struct DynamicViewportAndScissor;
+unsafe impl Set<()> for () {
+	fn viewports(&self) -> Option<&[super::Viewport]> {
+		None
+	}
 
-impl DynamicStates for DynamicViewportAndScissor {
-	type Viewport = viewport::Dynamic;
-	type Scissor = scissor::Dynamic;
+	fn scissors(&self) -> Option<&[super::Scissor]> {
+		None
+	} 
+}
+
+pub struct DynamicViewportAndScissor<const N: usize>;
+
+impl<const N: usize> DynamicStates for DynamicViewportAndScissor<N> {
+	type Viewport = viewport::Dynamic<N>;
+	type Scissor = scissor::Dynamic<N>;
 	type LineWidth = line_width::Static;
 	type DepthBias = depth_bias::Static;
 	type BlendConstants = blend_constants::Static;
@@ -209,4 +225,24 @@ impl DynamicStates for DynamicViewportAndScissor {
 	type StencilCompareMask = stencil_compare_mask::Static;
 	type StencilWriteMask = stencil_write_mask::Static;
 	type StencilReference = stencil_reference::Static;
+}
+
+unsafe impl<const N: usize> Set<DynamicViewportAndScissor<N>> for ([super::Viewport; N], [super::Scissor; N]) {
+	fn viewports(&self) -> Option<&[super::Viewport]> {
+		Some(&self.0)
+	}
+
+	fn scissors(&self) -> Option<&[super::Scissor]> {
+		Some(&self.1)
+	}
+}
+
+unsafe impl Set<DynamicViewportAndScissor<1>> for (super::Viewport, super::Scissor) {
+	fn viewports(&self) -> Option<&[super::Viewport]> {
+		Some(std::slice::from_ref(&self.0))
+	}
+
+	fn scissors(&self) -> Option<&[super::Scissor]> {
+		Some(std::slice::from_ref(&self.1))
+	}
 }

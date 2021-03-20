@@ -33,10 +33,6 @@ pub mod command;
 #[cfg(feature = "winit")]
 pub mod win;
 
-use instance::{
-	layer::InstanceValidationLayer
-};
-
 pub use resource::Resource;
 pub use instance::Instance;
 pub use device::{
@@ -50,20 +46,37 @@ pub use framebuffer::Framebuffer;
 
 pub struct Entry {
 	handle: ash::Entry,
-	extensions: OnceCell<instance::Extensions>
+	extensions: OnceCell<instance::Extensions>,
+	layers: OnceCell<instance::ValidationLayers>
 }
 
 impl Entry {
 	pub fn new() -> Result<Entry, ash::LoadingError> {
 		Ok(Entry {
 			handle: ash::Entry::new()?,
-			extensions: OnceCell::new()
+			extensions: OnceCell::new(),
+			layers: OnceCell::new()
 		})
 	}
 
-	pub fn validation_layers<'a>(&'a self) -> impl 'a + Iterator<Item=InstanceValidationLayer<'a>> {
-		self.handle.enumerate_instance_layer_properties().unwrap().into_iter().map(move |props| {
-			InstanceValidationLayer::new(self, props)
+	pub fn validation_layers<'a>(&'a self) -> &instance::ValidationLayers {
+		self.layers.get_or_init(|| unsafe {
+			let mut layers = instance::ValidationLayers::none();
+			for layer_prop in self.handle.enumerate_instance_layer_properties().unwrap() {
+				let c_name = CStr::from_ptr(layer_prop.layer_name.as_ptr());
+				match instance::ValidationLayer::from_c_name(c_name) {
+					Some(layer) => {
+						log::info!("available validation layer `{}`", layer);
+						layers.insert(layer)
+					},
+					None => {
+						let name = c_name.to_str().expect("validation layer name is not UTF-8 encoded");
+						warn!("unknown validation layer `{}`", name)
+					}
+				}
+			}
+
+			layers
 		})
 	}
 
@@ -73,7 +86,10 @@ impl Entry {
 			for ext_prop in self.handle.enumerate_instance_extension_properties().unwrap() {
 				let c_name = CStr::from_ptr(ext_prop.extension_name.as_ptr());
 				match instance::Extension::from_c_name(c_name) {
-					Some(ext) => extensions.insert(ext),
+					Some(ext) => {
+						log::info!("available instance extension `{}`", ext);
+						extensions.insert(ext)
+					},
 					None => {
 						let name = c_name.to_str().expect("instance extension name is not UTF-8 encoded");
 						warn!("unknown instance extension `{}`", name)

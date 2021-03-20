@@ -1,3 +1,9 @@
+use std::{
+	hash::{
+		Hash,
+		Hasher
+	}
+};
 use ash::{
 	vk
 };
@@ -25,6 +31,12 @@ impl<'a> QueueFamily<'a> {
 			index,
 			props
 		}
+	}
+
+	/// Number of queues in this family.
+	#[inline]
+	pub fn queue_count(&self) -> u32 {
+		self.props.queue_count
 	}
 
 	/// Physical device this queue family is attached to.
@@ -69,5 +81,19 @@ impl<'a> QueueFamily<'a> {
 	#[inline]
 	pub fn supports_sparse_binding(&self) -> bool {
 		self.props.queue_flags.contains(vk::QueueFlags::SPARSE_BINDING)
+	}
+}
+
+impl<'a> PartialEq for QueueFamily<'a> {
+	fn eq(&self, other: &Self) -> bool {
+		self.index() == other.index() && self.physical_device() == other.physical_device()
+	}
+}
+
+impl<'a> Eq for QueueFamily<'a> {}
+
+impl<'a> Hash for QueueFamily<'a> {
+	fn hash<H: Hasher>(&self, h: &mut H) {
+		self.index().hash(h)
 	}
 }

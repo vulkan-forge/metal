@@ -91,13 +91,15 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 }
 
 impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
-	pub fn bind_pipeline<'p, P>(
+	pub fn bind_pipeline<'p, P, S>(
 		&'p mut self,
-		pipeline: &Arc<P>
+		pipeline: &Arc<P>,
+		dynamic_states: S
 	) -> Pipeline<'p, 'a, B, L, P>
 	where
 		P: pipeline::GraphicsPipeline,
 		P::Layout: pipeline::layout::CompatibleWith<L>,
+		S: pipeline::dynamic_state::Set<P::DynamicStates>
 	{
 		unsafe {
 			self.recorder.buffer.device().handle().cmd_bind_pipeline(
@@ -105,6 +107,22 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 				vk::PipelineBindPoint::GRAPHICS,
 				pipeline.handle()
 			);
+
+			if let Some(viewports) = dynamic_states.viewports() {
+				self.recorder.buffer.device().handle().cmd_set_viewport(
+					self.recorder.buffer.handle(),
+					0,
+					std::mem::transmute(viewports) // safe thanks to #[repr(transparent)] for Viewport.
+				)
+			}
+
+			if let Some(scissors) = dynamic_states.scissors() {
+				self.recorder.buffer.device().handle().cmd_set_scissor(
+					self.recorder.buffer.handle(),
+					0,
+					std::mem::transmute(scissors) // safe thanks to #[repr(transparent)] for Scissors.
+				)
+			}
 		}
 
 		Pipeline {
@@ -251,6 +269,8 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout, P: pipeline::GraphicsPipeline> Pipe
 				offset,
 				index_buffer.index_type()
 			);
+
+			// log::debug!("draw indexed: {} indexes of type {:?}", index_count * index_buffer.index_per_item(), index_buffer.index_type());
 
 			self.recorder.buffer.device().handle().cmd_draw_indexed(
 				self.recorder.buffer.handle(),

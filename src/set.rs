@@ -312,6 +312,14 @@ macro_rules! extensions {
 	}
 }
 
+macro_rules! validation_layers {
+	($($field:ident : $var:ident => $s:expr,)*) => {
+		set!(ValidationLayer, ValidationLayers, ValidationLayersIter, ValidationLayersIntoIter, $($field : $var => $s,)*);
+		set_c_names!(ValidationLayer, ValidationLayers, $($field : $var => $s,)*);
+		impl Copy for ValidationLayers { }
+	}
+}
+
 macro_rules! features {
 	($ffi_ty:path, $tvalue:expr, $($field:ident : $var:ident => $ffi_field:ident : $s:expr,)*) => {
 		set!(Feature, Features, FeaturesIter, FeaturesIntoIter, $($field : $var => $s,)*);

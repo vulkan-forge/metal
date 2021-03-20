@@ -1,6 +1,7 @@
 use std::{
 	sync::Arc,
-	ffi::c_void
+	ffi::c_void,
+	fmt
 };
 use ash::{
 	vk,
@@ -18,6 +19,25 @@ pub enum MapError {
 	NotHostVisible,
 	OutOfMemory(OomError),
 	MemoryMapFailed
+}
+
+impl fmt::Display for MapError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Self::NotHostVisible => write!(f, "memory is not visible to host"),
+			Self::OutOfMemory(e) => e.fmt(f),
+			Self::MemoryMapFailed => write!(f, "memory map failed")
+		}
+	}
+}
+
+impl std::error::Error for MapError {
+	fn source(&self) -> Option<&(dyn 'static + std::error::Error)> {
+		match self {
+			Self::OutOfMemory(e) => Some(e),
+			_ => None
+		}
+	}
 }
 
 impl From<vk::Result> for MapError {
@@ -113,6 +133,9 @@ pub struct MappedMemory {
 	memory: Memory,
 	ptr: *mut c_void
 }
+
+unsafe impl Send for MappedMemory {}
+unsafe impl Sync for MappedMemory {}
 
 impl MappedMemory {
 	pub fn ptr(&self) -> *mut c_void {

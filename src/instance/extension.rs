@@ -5,6 +5,7 @@ use std::{
 use crate::Unbuildable;
 
 extensions! {
+	debug_report: DebugReport => b"VK_EXT_debug_report\0",
 	khr_surface: KhrSurface => b"VK_KHR_surface\0",
 	khr_display: KhrDisplay => b"VK_KHR_display\0",
 	khr_xlib_surface: KhrXlibSurface => b"VK_KHR_xlib_surface\0",

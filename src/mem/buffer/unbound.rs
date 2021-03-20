@@ -1,8 +1,11 @@
+use std::{
+	sync::Arc,
+	fmt
+};
 use ash::{
 	vk,
-	version::DeviceV1_0
+	version::DeviceV1_0,
 };
-use std::sync::Arc;
 use crate::{
 	Device,
 	DeviceOwned,
@@ -24,6 +27,24 @@ pub enum CreationError {
 	InvalidOpaqueCaptureAddress
 }
 
+impl fmt::Display for CreationError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Self::OutOfMemory(e) => e.fmt(f),
+			Self::InvalidOpaqueCaptureAddress => write!(f, "invalid opaque capture address")
+		}
+	}
+}
+
+impl std::error::Error for CreationError {
+	fn source(&self) -> Option<&(dyn 'static + std::error::Error)> {
+		match self {
+			Self::OutOfMemory(e) => Some(e),
+			_ => None
+		}
+	}
+}
+
 impl From<vk::Result> for CreationError {
 	fn from(r: vk::Result) -> CreationError {
 		match r {
@@ -39,6 +60,25 @@ impl From<vk::Result> for CreationError {
 pub enum BindError {
 	OutOfMemory(OomError),
 	InvalidOpaqueCaptureAddress
+}
+
+
+impl fmt::Display for BindError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Self::OutOfMemory(e) => e.fmt(f),
+			Self::InvalidOpaqueCaptureAddress => write!(f, "invalid opaque capture address")
+		}
+	}
+}
+
+impl std::error::Error for BindError {
+	fn source(&self) -> Option<&(dyn 'static + std::error::Error)> {
+		match self {
+			Self::OutOfMemory(e) => Some(e),
+			_ => None
+		}
+	}
 }
 
 impl From<vk::Result> for BindError {
@@ -107,7 +147,7 @@ impl Unbound {
 	}
 
 	#[inline]
-	pub unsafe fn bind<S: Send + Slot>(self, slot: S) -> Result<Bound, (Self, BindError)> {
+	pub unsafe fn bind<S: Slot>(self, slot: S) -> Result<Bound<S>, (Self, BindError)> {
 		let memory = slot.memory();
 		
 		// We check for correctness in debug mode.

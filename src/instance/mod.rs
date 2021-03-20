@@ -19,7 +19,7 @@ pub mod physical_device;
 
 pub use layer::{
 	ValidationLayer,
-	InstanceValidationLayer
+	ValidationLayers
 };
 pub use extension::{
 	Extension,
@@ -77,8 +77,14 @@ pub struct Instance {
 impl Instance {
 	/// Create a new instance.
 	pub fn new<E: IntoIterator<Item=Extension>>(entry: Arc<Entry>, required_extensions: E) -> Result<Instance, CreationError> {
+		Self::with_validation_layers(entry, required_extensions, std::iter::empty())
+	}
+	
+	/// Create a new instance with the given validation layers.
+	pub fn with_validation_layers<E: IntoIterator<Item=Extension>, L: IntoIterator<Item=ValidationLayer>>(entry: Arc<Entry>, required_extensions: E, validation_layers: L) -> Result<Instance, CreationError> {
 		unsafe {
 			let available_extensions = entry.extensions();
+			let available_layers = entry.validation_layers();
 
 			let mut loaded_extensions = Extensions::none();
 			let mut extension_names = Vec::new();
@@ -91,14 +97,28 @@ impl Instance {
 				extension_names.push(ext.c_name().as_ptr())
 			}
 
-			// let validation_layers = [
-			// 	#[cfg(debug_assertions)]
-			// 	ValidationLayer::KhronosValidation
-			// ];
-			// let mut layer_names = Vec::new();
-			// for ext in &validation_layers {
-			// 	layer_names.push(ext.c_name().as_ptr())
-			// }
+			let mut enabled_layers = ValidationLayers::none();
+			let mut layer_names = Vec::new();
+			
+			#[cfg(debug_assertions)]
+			{
+				if available_layers.contains(ValidationLayer::KhronosValidation) {
+					log::info!("enabling khronos validation layer");
+					enabled_layers.khronos_validation = true;
+					layer_names.push(ValidationLayer::KhronosValidation.c_name().as_ptr())
+				} else {
+					log::warn!("khronos validation layer is unavailable");
+				}
+			}
+
+			for layer in validation_layers {
+				if !available_layers.contains(layer) {
+					return Err(CreationError::MissingValidationLayer(layer))
+				}
+
+				enabled_layers.insert(layer);
+				layer_names.push(layer.c_name().as_ptr())
+			}
 
 			let app_info = vk::ApplicationInfo {
 				api_version: vk::make_version(1, 0, 0),
@@ -109,8 +129,8 @@ impl Instance {
 				p_application_info: &app_info,
 				enabled_extension_count: extension_names.len() as u32,
 				pp_enabled_extension_names: extension_names.as_ptr(),
-				// enabled_layer_count: layer_names.len() as u32,
-				// pp_enabled_layer_names: layer_names.as_ptr(),
+				enabled_layer_count: layer_names.len() as u32,
+				pp_enabled_layer_names: layer_names.as_ptr(),
 				..Default::default()
 			};
 
