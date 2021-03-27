@@ -12,4 +12,13 @@ impl ClearValue {
 			}
 		})
 	}
+
+	pub fn depth_stencil(depth: f32, stencil: u32) -> ClearValue {
+		ClearValue(vk::ClearValue {
+			depth_stencil: vk::ClearDepthStencilValue {
+				depth,
+				stencil
+			}
+		})
+	}
 }

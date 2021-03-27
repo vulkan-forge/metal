@@ -33,7 +33,9 @@ impl From<vk::Result> for CreationError {
 	}
 }
 
-pub unsafe trait Layout: Resource<Handle=vk::PipelineLayout> {
+pub type VulkanLayout = vk::PipelineLayout;
+
+pub unsafe trait Layout: Resource<Handle=VulkanLayout> {
 	type PushConstants: PushConstants;
 	type Sets;
 }
@@ -53,9 +55,9 @@ impl<P: PushConstants> NoSets<P> {
 }
 
 unsafe impl<P: PushConstants> Resource for NoSets<P> {
-	type Handle = vk::PipelineLayout;
+	type Handle = VulkanLayout;
 
-	fn handle(&self) -> vk::PipelineLayout {
+	fn handle(&self) -> VulkanLayout {
 		self.0.handle()
 	}
 }

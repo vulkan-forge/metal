@@ -72,7 +72,14 @@ impl UnformatedReference {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[repr(transparent)]
 pub struct Reference(vk::AttachmentReference);
+
+impl Reference {
+	pub fn as_vulkan(&self) -> *const vk::AttachmentReference {
+		&self.0
+	}
+}
 
 #[derive(Clone, Debug)]
 pub struct Attachments(Vec<vk::AttachmentDescription>);

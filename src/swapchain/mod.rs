@@ -1,6 +1,5 @@
 use ash::vk;
 use std::{
-	rc::Rc,
 	sync::Arc,
 	fmt
 };
@@ -132,7 +131,7 @@ pub(crate) struct Inner<W> {
 }
 
 pub struct Swapchain<W> {
-	inner: Rc<Inner<W>>,
+	inner: Arc<Inner<W>>,
 }
 
 impl<W> Swapchain<W> {
@@ -218,7 +217,7 @@ impl<W> Swapchain<W> {
 			ext_khr_swapchain.create_swapchain(&infos, None)?
 		};
 
-		let inner = Rc::new(Inner {
+		let inner = Arc::new(Inner {
 			device: device.clone(),
 			surface: surface.clone(),
 			handle,
@@ -274,7 +273,7 @@ impl<W> DeviceOwned for Swapchain<W> {
 /// 
 /// This type contains a reference to the swapchain
 /// to ensure that it is not released while acquiring an image.
-pub struct Acquiring<W>(Rc<Inner<W>>);
+pub struct Acquiring<W>(Arc<Inner<W>>);
 
 pub struct Acquire<'a, W> {
 	swapchain: &'a mut Swapchain<W>,

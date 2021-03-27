@@ -329,11 +329,14 @@ impl<W: 'static> Renderer<W> {
 					layer_count: 1
 				}
 			).expect("unable to create swapchain image view");
+
+			let mut attachments = image::LocalViews::new();
+			attachments.push(Arc::new(view));
 	
 			Arc::new(Framebuffer::new(
 				&device,
 				&render_pass,
-				vec![Arc::new(view)],
+				attachments,
 				dimensions,
 				1
 			).expect("unable to create framebuffer"))

@@ -142,7 +142,7 @@ impl Unbound {
 	pub fn memory_requirements(&self) -> MemoryRequirements {
 		unsafe {
 			let mr = self.device.handle.get_buffer_memory_requirements(self.handle);
-			MemoryRequirements(mr)
+			MemoryRequirements::new(mr, true)
 		}
 	}
 

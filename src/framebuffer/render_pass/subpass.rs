@@ -11,7 +11,7 @@ use super::{
 
 macro_rules! pipeline_stages {
 	($($elem:ident => $val:expr,)+) => (
-		#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+		#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 		#[allow(missing_docs)]
 		pub struct PipelineStages {
 			$(
@@ -85,27 +85,27 @@ pipeline_stages! {
 
 macro_rules! access_flags {
 	($($elem:ident => $val:expr,)+) => (
-		#[derive(Debug, Copy, Clone)]
+		#[derive(Debug, Copy, Clone, Default)]
 		#[allow(missing_docs)]
-		pub struct AccessFlagBits {
+		pub struct AccessFlags {
 			$(
 				pub $elem: bool,
 			)+
 		}
 
-		impl AccessFlagBits {
-			/// Builds an `AccessFlagBits` struct with all bits set.
-			pub fn all() -> AccessFlagBits {
-				AccessFlagBits {
+		impl AccessFlags {
+			/// Builds an `AccessFlags` struct with all bits set.
+			pub fn all() -> AccessFlags {
+				AccessFlags {
 					$(
 						$elem: true,
 					)+
 				}
 			}
 
-			/// Builds an `AccessFlagBits` struct with none of the bits set.
-			pub fn none() -> AccessFlagBits {
-				AccessFlagBits {
+			/// Builds an `AccessFlags` struct with none of the bits set.
+			pub fn none() -> AccessFlags {
+				AccessFlags {
 					$(
 						$elem: false,
 					)+
@@ -122,12 +122,12 @@ macro_rules! access_flags {
 			}
 		}
 
-		impl ops::BitOr for AccessFlagBits {
-			type Output = AccessFlagBits;
+		impl ops::BitOr for AccessFlags {
+			type Output = AccessFlags;
 
 			#[inline]
-			fn bitor(self, rhs: AccessFlagBits) -> AccessFlagBits {
-				AccessFlagBits {
+			fn bitor(self, rhs: AccessFlags) -> AccessFlags {
+				AccessFlags {
 					$(
 						$elem: self.$elem || rhs.$elem,
 					)+
@@ -135,9 +135,9 @@ macro_rules! access_flags {
 			}
 		}
 
-		impl ops::BitOrAssign for AccessFlagBits {
+		impl ops::BitOrAssign for AccessFlags {
 			#[inline]
-			fn bitor_assign(&mut self, rhs: AccessFlagBits) {
+			fn bitor_assign(&mut self, rhs: AccessFlags) {
 				$(
 					self.$elem = self.$elem || rhs.$elem;
 				)+
@@ -214,7 +214,7 @@ impl Subpass {
 	pub fn as_ref(&self) -> SubpassRef {
 		SubpassRef {
 			color_attachments: self.color_attachments.as_ref(),
-			depth_stencil: self.depth_stencil,
+			depth_stencil: self.depth_stencil.as_ref(),
 			input_attachments: self.input_attachments.as_ref(),
 			resolve_attachments: self.resolve_attachments.as_ref(),
 			preserve_attachments: self.preserve_attachments.as_ref()
@@ -251,7 +251,7 @@ pub struct SubpassRef<'r> {
 	pub color_attachments: &'r [attachment::Reference],
 
 	/// Index and layout of the attachment to use as depth-stencil attachment.
-	pub depth_stencil: Option<attachment::Reference>,
+	pub depth_stencil: Option<&'r attachment::Reference>,
 
 	/// Indices and layouts of attachments to use as input attachments.
 	pub input_attachments: &'r [attachment::Reference],
@@ -289,7 +289,7 @@ impl<'r> SubpassRef<'r> {
 				self.resolve_attachments.as_ptr() as *const _
 			},
 
-			p_depth_stencil_attachment: self.depth_stencil.as_ref().map(|r| r as *const attachment::Reference as *const _).unwrap_or(std::ptr::null()),
+			p_depth_stencil_attachment: self.depth_stencil.as_ref().map(|r| r.as_vulkan()).unwrap_or(std::ptr::null()),
 
 			preserve_attachment_count: self.preserve_attachments.len() as u32,
 			p_preserve_attachments: self.preserve_attachments.as_ptr() as *const _
@@ -326,10 +326,10 @@ pub struct Dependency {
 	pub destination_stages: PipelineStages,
 
 	/// The way the source subpass accesses the attachments on which we depend.
-	pub source_access: AccessFlagBits,
+	pub source_access: AccessFlags,
 
 	/// The way the destination subpass accesses the attachments on which we depend.
-	pub destination_access: AccessFlagBits,
+	pub destination_access: AccessFlags,
 
 	/// If false, then the whole subpass must be finished for the next one to start. If true, then
 	/// the implementation can start the new subpass for some given pixels as long as the previous
@@ -383,7 +383,7 @@ impl<'a> Subpasses<'a> {
 	}
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Reference {
 	render_pass: Arc<RenderPass>,
 	index: u32

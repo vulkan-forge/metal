@@ -10,7 +10,6 @@ use crate::{
 	OomError,
 	Device,
 	image,
-	Image,
 	Resource
 };
 pub mod render_pass;
@@ -67,27 +66,27 @@ impl From<vk::Result> for CreationError {
 	}
 }
 
-pub struct Framebuffer<I: Image> {
+pub struct Framebuffer<A: AsRef<[vk::ImageView]> = image::LocalViews<'static>> {
 	device: Arc<Device>,
 	render_pass: Arc<RenderPass>,
-	views: Vec<Arc<image::View<I>>>,
+	attachments: A,
 	handle: vk::Framebuffer
 }
 
-impl<I: Image> Framebuffer<I> {
+impl<A: AsRef<[vk::ImageView]>> Framebuffer<A> {
 	pub fn new(
 		device: &Arc<Device>,
 		render_pass: &Arc<RenderPass>,
-		views: Vec<Arc<image::View<I>>>,
+		attachments: A,
 		size: (u32, u32),
 		layers: u32
-	) -> Result<Framebuffer<I>, CreationError> {
-		let vk_attachments: Vec<_> = views.iter().map(|v| v.handle()).collect();
+	) -> Result<Self, CreationError> {
+		let vk_attachements = attachments.as_ref();
 
 		let infos = vk::FramebufferCreateInfo {
 			render_pass: render_pass.handle(),
-			attachment_count: vk_attachments.len() as u32,
-			p_attachments: vk_attachments.as_ptr(),
+			attachment_count: vk_attachements.len() as u32,
+			p_attachments: vk_attachements.as_ptr(),
 			width: size.0,
 			height: size.1,
 			layers,
@@ -101,13 +100,13 @@ impl<I: Image> Framebuffer<I> {
 		Ok(Framebuffer {
 			device: device.clone(),
 			render_pass: render_pass.clone(),
-			views: views,
+			attachments,
 			handle
 		})
 	}
 
-	pub fn views(&self) -> &[Arc<image::View<I>>] {
-		&self.views
+	pub fn attachments(&self) -> &A {
+		&self.attachments
 	}
 
 	pub fn render_pass(&self) -> &Arc<RenderPass> {
@@ -115,7 +114,7 @@ impl<I: Image> Framebuffer<I> {
 	}
 }
 
-unsafe impl<I: Image> crate::Resource for Framebuffer<I> {
+unsafe impl<A: AsRef<[vk::ImageView]>> crate::Resource for Framebuffer<A> {
 	type Handle = vk::Framebuffer;
 
 	fn handle(&self) -> vk::Framebuffer {
@@ -123,7 +122,7 @@ unsafe impl<I: Image> crate::Resource for Framebuffer<I> {
 	}
 }
 
-impl<I: Image> Drop for Framebuffer<I> {
+impl<A: AsRef<[vk::ImageView]>> Drop for Framebuffer<A> {
 	fn drop(&mut self) {
 		unsafe {
 			self.device.handle().destroy_framebuffer(self.handle, None)

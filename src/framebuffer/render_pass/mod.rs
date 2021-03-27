@@ -1,8 +1,14 @@
+use std::{
+	sync::Arc,
+	hash::{
+		Hash,
+		Hasher
+	}
+};
 use ash::{
 	vk,
 	version::DeviceV1_0
 };
-use std::sync::Arc;
 use crate::{
 	OomError,
 	Device,
@@ -181,6 +187,20 @@ unsafe impl crate::Resource for RenderPass {
 
 	fn handle(&self) -> vk::RenderPass {
 		self.handle
+	}
+}
+
+impl PartialEq for RenderPass {
+	fn eq(&self, other: &RenderPass) -> bool {
+		self.handle == other.handle
+	}
+}
+
+impl Eq for RenderPass {}
+
+impl Hash for RenderPass {
+	fn hash<H: Hasher>(&self, h: &mut H) {
+		self.handle.hash(h)
 	}
 }
 

@@ -9,10 +9,12 @@ use ash::vk::Handle;
 
 mod ref_local;
 mod ref_send;
+mod ref_sync;
 mod proxy;
 
 pub use ref_local::Ref;
 pub use ref_send::SendRef;
+pub use ref_sync::SyncRef;
 pub use proxy::Proxy;
 
 /// GPU resource.

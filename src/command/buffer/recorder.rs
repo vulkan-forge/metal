@@ -12,7 +12,6 @@ use crate::{
 	Resource,
 	framebuffer,
 	Framebuffer,
-	Image,
 	pipeline::{
 		self,
 		vertex_input::VertexInput,
@@ -32,10 +31,10 @@ pub struct Recorder<'a, B: Buffer> {
 }
 
 impl<'a, B: Buffer> Recorder<'a, B> {
-	pub fn begin_render_pass<'r, I: Send + Sync + Image + 'static, C: pipeline::layout::PushConstants>(
+	pub fn begin_render_pass<'r, A: AsRef<[vk::ImageView]> + Send + Sync + 'static, C: pipeline::layout::PushConstants>(
 		&'r mut self,
 		render_pass: &Arc<framebuffer::RenderPass>,
-		framebuffer: &Arc<Framebuffer<I>>,
+		framebuffer: &Arc<Framebuffer<A>>,
 		(x, y, width, height): (i32, i32, u32, u32),
 		clear_values: &[format::ClearValue]
 	) -> RenderPass<'r, 'a, B, pipeline::layout::NoSets<C>> {

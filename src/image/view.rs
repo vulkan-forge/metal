@@ -4,7 +4,8 @@ use ash::{
 };
 use crate::{
 	OomError,
-	Format
+	Format,
+	Resource
 };
 use super::{
 	Image
@@ -30,7 +31,7 @@ impl From<vk::Result> for CreationError {
 pub enum Type {
 	D1 = vk::ImageViewType::TYPE_1D.as_raw(),
 	D2 = vk::ImageViewType::TYPE_2D.as_raw(),
-	D = vk::ImageViewType::TYPE_3D.as_raw(),
+	D3 = vk::ImageViewType::TYPE_3D.as_raw(),
 	Cube = vk::ImageViewType::CUBE.as_raw(),
 	D1Array = vk::ImageViewType::TYPE_1D_ARRAY.as_raw(),
 	D2Array = vk::ImageViewType::TYPE_2D_ARRAY.as_raw(),
@@ -121,6 +122,14 @@ impl Aspects {
 		Self::new(true, false, false, false)
 	}
 
+	pub fn depth() -> Self {
+		Self::new(false, true, false, false)
+	}
+
+	pub fn depth_stencil() -> Self {
+		Self::new(false, true, true, false)
+	}
+
 	pub(crate) fn into_vulkan(self) -> vk::ImageAspectFlags {
 		let mut flags = vk::ImageAspectFlags::empty();
 
@@ -165,19 +174,27 @@ impl SubresourceRange {
 	}
 }
 
-pub struct View<I: Image> {
+pub unsafe trait View: Resource<Handle=vk::ImageView> {
+	// ...
+}
+
+unsafe impl<V: std::ops::Deref> View for V where V::Target: View {
+	// ...
+}
+
+pub struct Raw<I: Image> {
 	image: I,
 	handle: vk::ImageView
 }
 
-impl<I: Image> View<I> {
+impl<I: Image> Raw<I> {
 	pub fn new(
 		image: I,
 		ty: Type,
 		format: Format,
 		components: ComponentMapping,
 		subresource_range: SubresourceRange
-	) -> Result<View<I>, CreationError> {
+	) -> Result<Self, CreationError> {
 		let infos = vk::ImageViewCreateInfo {
 			image: image.handle(),
 			view_type: ty.into_vulkan(),
@@ -191,21 +208,167 @@ impl<I: Image> View<I> {
 			image.device().handle().create_image_view(&infos, None)?
 		};
 
-		Ok(View {
+		Ok(Self {
 			image,
 			handle
 		})
 	}
+}
 
-	pub(crate) fn handle(&self) -> vk::ImageView {
+unsafe impl<I: Image> Resource for Raw<I> {
+	type Handle = vk::ImageView;
+
+	fn handle(&self) -> vk::ImageView {
 		self.handle
 	}
 }
 
-impl<I: Image> Drop for View<I> {
+unsafe impl<I: Image> View for Raw<I> {
+	//
+}
+
+impl<I: Image> Drop for Raw<I> {
 	fn drop(&mut self) {
 		unsafe {
 			self.image.device().handle().destroy_image_view(self.handle, None)
 		}
+	}
+}
+
+pub struct LocalViews<'a> {
+	handles: Vec<vk::ImageView>,
+	resources: Vec<crate::resource::Ref<'a>>
+}
+
+impl<'a> LocalViews<'a> {
+	pub fn new() -> Self {
+		Self {
+			handles: Vec::new(),
+			resources: Vec::new()
+		}
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.handles.is_empty()
+	}
+
+	pub fn len(&self) -> usize {
+		self.handles.len()
+	}
+
+	pub fn push<V: 'a + View>(&mut self, view: V) {
+		self.handles.push(view.handle());
+		self.resources.push(view.into());
+	}
+
+	pub(crate) fn as_vulkan(&self) -> &[vk::ImageView] {
+		&self.handles
+	}
+}
+
+impl<'a> AsRef<[vk::ImageView]> for LocalViews<'a> {
+	fn as_ref(&self) -> &[vk::ImageView] {
+		self.as_vulkan()
+	}
+}
+
+impl<'a> IntoIterator for LocalViews<'a> {
+	type Item = crate::resource::Ref<'a>;
+	type IntoIter = std::vec::IntoIter<crate::resource::Ref<'a>>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.resources.into_iter()
+	}
+}
+
+pub struct Views<'a> {
+	handles: Vec<vk::ImageView>,
+	resources: Vec<crate::resource::SendRef<'a>>
+}
+
+impl<'a> Views<'a> {
+	pub fn new() -> Self {
+		Self {
+			handles: Vec::new(),
+			resources: Vec::new()
+		}
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.handles.is_empty()
+	}
+
+	pub fn len(&self) -> usize {
+		self.handles.len()
+	}
+
+	pub fn push<V: 'a + Send + View>(&mut self, view: V) {
+		self.handles.push(view.handle());
+		self.resources.push(view.into());
+	}
+
+	pub(crate) fn as_vulkan(&self) -> &[vk::ImageView] {
+		&self.handles
+	}
+}
+
+impl<'a> IntoIterator for Views<'a> {
+	type Item = crate::resource::SendRef<'a>;
+	type IntoIter = std::vec::IntoIter<crate::resource::SendRef<'a>>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.resources.into_iter()
+	}
+}
+
+impl<'a> AsRef<[vk::ImageView]> for Views<'a> {
+	fn as_ref(&self) -> &[vk::ImageView] {
+		self.as_vulkan()
+	}
+}
+
+pub struct SyncViews<'a> {
+	handles: Vec<vk::ImageView>,
+	resources: Vec<crate::resource::SyncRef<'a>>
+}
+
+impl<'a> SyncViews<'a> {
+	pub fn new() -> Self {
+		Self {
+			handles: Vec::new(),
+			resources: Vec::new()
+		}
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.handles.is_empty()
+	}
+
+	pub fn len(&self) -> usize {
+		self.handles.len()
+	}
+
+	pub fn push<V: 'a + Send + Sync + View>(&mut self, view: V) {
+		self.handles.push(view.handle());
+		self.resources.push(view.into());
+	}
+
+	pub(crate) fn as_vulkan(&self) -> &[vk::ImageView] {
+		&self.handles
+	}
+}
+
+impl<'a> IntoIterator for SyncViews<'a> {
+	type Item = crate::resource::SyncRef<'a>;
+	type IntoIter = std::vec::IntoIter<crate::resource::SyncRef<'a>>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.resources.into_iter()
+	}
+}
+
+impl<'a> AsRef<[vk::ImageView]> for SyncViews<'a> {
+	fn as_ref(&self) -> &[vk::ImageView] {
+		self.as_vulkan()
 	}
 }
