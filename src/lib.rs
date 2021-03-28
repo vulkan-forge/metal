@@ -29,6 +29,7 @@ pub mod image;
 pub mod pipeline;
 pub mod framebuffer;
 pub mod command;
+pub mod descriptor;
 
 #[cfg(feature = "winit")]
 pub mod win;
