@@ -9,13 +9,12 @@ use std::{
 use crate::{
 	OomError,
 	Device,
-	Resource
+	Resource,
+	descriptor
 };
 
-pub mod set;
 pub mod push_constant;
 
-pub use set::Set;
 pub use push_constant::PushConstants;
 
 #[derive(Debug)]
@@ -37,20 +36,20 @@ pub type VulkanLayout = vk::PipelineLayout;
 
 pub unsafe trait Layout: Resource<Handle=VulkanLayout> {
 	type PushConstants: PushConstants;
-	type Sets;
+	type Sets<'s>: descriptor::Sets<'s>;
 }
 
 unsafe impl<L: std::ops::Deref> Layout for L where L::Target: Layout {
 	type PushConstants = <L::Target as Layout>::PushConstants;
-	type Sets = <L::Target as Layout>::Sets;
+	type Sets<'s> = <L::Target as Layout>::Sets<'s>;
 }
 
 /// Layout without descriptor sets.
-pub struct NoSets<P: PushConstants>(Raw<P>);
+pub struct NoSets<P: PushConstants>(Raw<P, ()>);
 
 impl<P: PushConstants> NoSets<P> {
 	pub fn new(device: &Arc<Device>) -> Result<Self, CreationError> {
-		Ok(NoSets(Raw::new(device, &[])?))
+		Ok(NoSets(Raw::new(device, ())?))
 	}
 }
 
@@ -64,7 +63,7 @@ unsafe impl<P: PushConstants> Resource for NoSets<P> {
 
 unsafe impl<P: PushConstants> Layout for NoSets<P> {
 	type PushConstants = P;
-	type Sets = ();
+	type Sets<'s> = ();
 }
 
 /// Empty layout.
@@ -84,15 +83,17 @@ unsafe impl<P: PushConstants, L: Layout<PushConstants=P>> CompatibleWith<L> for 
 /// The `NoSets` layout is compatible with any layout with identical push constant ranges.
 unsafe impl<N: std::ops::Deref<Target=NoSets<P>>, P: PushConstants, L: Layout<PushConstants=P>> CompatibleWith<L> for N {}
 
-pub struct Raw<C: PushConstants> {
+pub struct Raw<C: PushConstants, S: descriptor::set::Layouts> {
 	device: Arc<Device>,
 	handle: vk::PipelineLayout,
-	pc: PhantomData<C>
+	pc: PhantomData<C>,
+	sets: PhantomData<S>
 }
 
-impl<C: PushConstants> Raw<C> {
-	pub fn new(device: &Arc<Device>, set_layouts: &[Set]) -> Result<Raw<C>, CreationError> {
-		let vk_set_layouts: Vec<_> = set_layouts.iter().map(|l| l.handle()).collect();
+impl<C: PushConstants, S: descriptor::set::Layouts> Raw<C, S> {
+	pub fn new(device: &Arc<Device>, set_layouts: S) -> Result<Raw<C, S>, CreationError> {
+		let vk_set_layouts = set_layouts.handles();
+		let vk_set_layouts = vk_set_layouts.as_ref();
 		
 		let push_constant_ranges = C::RANGES;
 
@@ -112,7 +113,8 @@ impl<C: PushConstants> Raw<C> {
 		Ok(Raw {
 			device: device.clone(),
 			handle,
-			pc: PhantomData
+			pc: PhantomData,
+			sets: PhantomData
 		})
 	}
 
@@ -121,7 +123,7 @@ impl<C: PushConstants> Raw<C> {
 	}
 }
 
-impl<C: PushConstants> Drop for Raw<C> {
+impl<C: PushConstants, S: descriptor::set::Layouts> Drop for Raw<C, S> {
 	fn drop(&mut self) {
 		unsafe {
 			self.device.handle().destroy_pipeline_layout(self.handle, None)

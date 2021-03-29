@@ -9,21 +9,33 @@ use crate::{
 };
 use super::{
 	set,
-	Set,
-	Type
+	Sets,
+	Type,
 };
 
 /// Descriptor pool.
-pub trait Pool: Sized {
-	type DescriptorSet<'a, L: set::Layout>: Set<Layout=L>;
+/// 
+/// ## Safety
+/// 
+/// The `Reference` type must represent a sound reference to the original pool.
+/// Such reference must not outlive the pool.
+/// The `allocate` function must return valid descriptor sets
+/// matching the layouts given as parameter and initialized with the given input values.
+/// Each returned descriptor set must own a reference to the descriptor pool
+/// it has been allocated from.
+pub unsafe trait Pool: Sized {
+	/// Pool reference.
+	type Reference<'a>: Reference;
 
-	unsafe fn wrap<'a, L: set::Layout>(&'a self, handle: set::RawHandle) -> Self::DescriptorSet<'a, L>;
+	/// Get a reference to this descriptor pool.
+	fn reference<'a>(&'a self) -> Self::Reference<'a>;
 
-	fn allocate<'a, L: set::Layouts>(&'a self, layouts: L) -> Result<L::Allocated<'a, Self>, AllocationError>;
+	/// Allocates new descriptor sets.
+	fn allocate<'a, 's, S: Sets<'s, Pool=Self::Reference<'a>>, V: set::Setters<'s, S>>(&'a self, layouts: S::Layouts, values: V) -> Result<S, AllocationError>;
 }
 
-/// Descriptor set deallocator.
-pub trait Deallocator {
+/// Descriptor pool reference.
+pub trait Reference {
 	/// Deallocate the given descriptor set.
 	/// 
 	/// Note that the pool may choose not to actually free the descriptor set
@@ -33,6 +45,15 @@ pub trait Deallocator {
 	/// 
 	/// The descriptor set must not be owned or borrowed.
 	unsafe fn free(&self, handle: set::RawHandle);
+}
+
+/// No pool reference.
+/// 
+/// This is usefull for the only sets that do not require allocation: the empty sets.
+impl Reference for () {
+	unsafe fn free(&self, _handle: set::RawHandle) {
+		panic!("trying to free an empty descriptor set")
+	}
 }
 
 pub enum CreationError {
@@ -123,14 +144,15 @@ impl Raw {
 	}
 }
 
-impl Pool for Raw {
-	type DescriptorSet<'a, L: set::Layout> = set::Raw<&'a Self, L>;
+unsafe impl Pool for Raw {
+	type Reference<'a> = &'a Self;
 
-	unsafe fn wrap<'a, L: set::Layout>(&'a self, handle: set::RawHandle) -> Self::DescriptorSet<'a, L> {
-		set::Raw::new(self, handle)
+	fn reference(&self) -> &Self {
+		self
 	}
 
-	fn allocate<'a, L: set::Layouts>(&'a self, layouts: L) -> Result<L::Allocated<'a, Self>, AllocationError> {
+	fn allocate<'a, 's, S: Sets<'s, Pool=Self::Reference<'a>>, V: set::Setters<'s, S>>(&'a self, layouts: S::Layouts, values: V) -> Result<S, AllocationError> {
+		use set::Layouts;
 		let layout_handles = layouts.handles();
 		let layout_handles = layout_handles.as_ref();
 		
@@ -146,12 +168,12 @@ impl Pool for Raw {
 		};
 
 		Ok(unsafe {
-			L::allocated_from_raw(self, handles)
+			values.into_descriptor_sets(self, handles)
 		})
 	}
 }
 
-impl<'a> Deallocator for &'a Raw {
+impl<'a> Reference for &'a Raw {
 	unsafe fn free(&self, handle: set::RawHandle) {
 		if self.free {
 			self.device.handle.free_descriptor_sets(self.handle, &[handle])

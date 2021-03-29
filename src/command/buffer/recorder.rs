@@ -4,8 +4,7 @@ use ash::{
 };
 use std::{
 	sync::Arc,
-	collections::HashSet,
-	marker::PhantomData
+	collections::HashSet
 };
 use crate::{
 	resource,
@@ -17,6 +16,7 @@ use crate::{
 		vertex_input::VertexInput,
 		input_assembly::InputAssembly
 	},
+	descriptor,
 	format,
 	mem
 };
@@ -59,7 +59,7 @@ impl<'a, B: Buffer> Recorder<'a, B> {
 
 		RenderPass {
 			recorder: self,
-			active_layout: PhantomData
+			sets: ()
 		}
 	}
 
@@ -78,14 +78,17 @@ impl<'a, B: Buffer> Recorder<'a, B> {
 /// The render pass ends when the `RenderPassRecorder` is dropped.
 pub struct RenderPass<'r, 'a, B: Buffer, L: pipeline::Layout> {
 	recorder: &'r mut Recorder<'a, B>,
-	active_layout: PhantomData<L>
+
+	/// Currently bound sets. 
+	sets: L::Sets<'a>,
 }
 
 impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
-	fn into_raw_parts(self) -> &'r mut Recorder<'a, B> {
+	fn into_raw_parts(self) -> (&'r mut Recorder<'a, B>, L::Sets<'a>) {
 		let recorder = unsafe { std::ptr::read(&self.recorder) };
+		let sets = unsafe { std::ptr::read(&self.sets) };
 		std::mem::forget(self);
-		recorder
+		(recorder, sets)
 	}
 }
 
@@ -97,9 +100,10 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 	) -> RenderPass<'r, 'a, B, M>
 	where
 		M: 'a + Send + pipeline::Layout,
-		T: pipeline::layout::set::Transition<L::Sets, M::Sets>
+		M::Sets<'a>: descriptor::SendSets<'a>,
+		T: descriptor::set::Transition<L::Sets<'a>, M::Sets<'a>>
 	{
-		let recorder = self.into_raw_parts();
+		let (recorder, sets) = self.into_raw_parts();
 
 		unsafe {
 			recorder.buffer.device().handle().cmd_bind_descriptor_sets(
@@ -114,9 +118,14 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 
 		recorder.resources.insert(layout.into());
 
+		let new_sets = transition.apply(sets);
+
+		use descriptor::SendSets;
+		recorder.resources.extend(new_sets.resources());
+
 		RenderPass {
 			recorder,
-			active_layout: PhantomData
+			sets: new_sets
 		}
 	}
 

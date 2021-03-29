@@ -1,3 +1,5 @@
+//! Update interface.
+
 use std::sync::Arc;
 use ash::{
 	vk,
@@ -8,7 +10,8 @@ use super::{
 	Descriptor,
 	Write,
 	Set,
-	set
+	set,
+	Writer
 };
 
 /// Descriptor set update.
@@ -27,20 +30,27 @@ impl Update {
 		}
 	}
 
-	pub fn write<S: Set, D: Descriptor>(
+	/// Write to the given descriptor set.
+	/// 
+	/// ## Safety
+	/// 
+	/// The caller must ensure that the input descriptor set will not be used
+	/// before the changes are applied, either by calling `apply` or
+	/// by dropping the `Update` instance.
+	pub unsafe fn write<D: Descriptor, S: Set, V>(
 		&mut self,
-		descriptor_set: &S,
-		_descriptor: D,
+		descriptor_set: &mut S,
 		offset: u32,
-		value: D::Value
+		value: &V
 	) where
-		S::Layout: set::layout::HasDescriptor<D>
+		S::Layout: set::layout::HasDescriptor<D>,
+		V: Writer<S, D>
 	{
 		let mut p_image_info = std::ptr::null();
 		let mut p_buffer_info = std::ptr::null();
 		let p_texel_buffer_view = std::ptr::null();
 
-		let info = D::write(value);
+		let info = value.prepare();
 
 		let count = match &info {
 			Write::Image(info) => {
@@ -77,7 +87,13 @@ impl Update {
 	}
 
 	pub fn apply(self) {
-		if let Some(device) = self.device {
+		std::mem::drop(self)
+	}
+}
+
+impl Drop for Update {
+	fn drop(&mut self) {
+		if let Some(device) = self.device.take() {
 			unsafe {
 				device.handle().update_descriptor_sets(&self.writes, &self.copies)
 			}

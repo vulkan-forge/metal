@@ -1,15 +1,67 @@
-use ash::vk;
-use crate::Resource;
+use std::{
+	sync::Arc,
+	marker::PhantomData
+};
+use ash::{
+	vk,
+	version::DeviceV1_0
+};
+use crate::{
+	Device,
+	Resource,
+	OomError
+};
 use super::super::{
-	Pool,
-	Descriptor
+	Descriptor,
 };
 
 pub type RawHandle = vk::DescriptorSetLayout;
 
+pub type Binding = vk::DescriptorSetLayoutBinding;
+
 /// Descriptor set layout.
-pub trait Layout: Resource<Handle=RawHandle> {
-	// ...
+/// 
+/// ## Safety
+/// 
+/// The `BINDINGS` const must match the layout bindings.
+pub unsafe trait Layout: Sized + Resource<Handle=RawHandle> {
+	const BINDINGS: &'static [vk::DescriptorSetLayoutBinding];
+}
+
+/// Layout instance, for a given device.
+pub struct Instance<L: Layout> {
+	device: Arc<Device>,
+	handle: RawHandle,
+	layout: PhantomData<L>
+}
+
+impl<L: Layout> Instance<L> {
+	/// Create a new layout instance for the given device.
+	pub fn new(device: &Arc<Device>) -> Result<Self, OomError> {
+		let infos = vk::DescriptorSetLayoutCreateInfo {
+			binding_count: L::BINDINGS.len() as u32,
+			p_bindings: L::BINDINGS.as_ptr(),
+			..Default::default()
+		};
+
+		let handle = unsafe {
+			device.handle().create_descriptor_set_layout(&infos, None)?
+		};
+
+		Ok(Instance {
+			device: device.clone(),
+			handle,
+			layout: PhantomData
+		})
+	}
+}
+
+impl<L: Layout> Drop for Instance<L> {
+	fn drop(&mut self) {
+		unsafe {
+			self.device.handle().destroy_descriptor_set_layout(self.handle, None);
+		}
+	}
 }
 
 /// Property for a given layout having defining the given descriptor.
@@ -28,40 +80,14 @@ pub unsafe trait Layouts {
 	/// Layout handles.
 	type Handles<'a>: AsRef<[RawHandle]>;
 
-	/// List of associated descriptor set (with the correct layout type).
-	type Allocated<'p, P: Pool>;
-
 	fn handles<'a>(&'a self) -> Self::Handles<'a>;
-
-	/// Converts an untyped list of descriptor sets into
-	/// a typed array/tuple of descriptor sets.
-	unsafe fn allocated_from_raw<'p, P: Pool>(pool: &'p P, handles: Vec<super::RawHandle>) -> Self::Allocated<'p, P>;
 }
 
-unsafe impl<L: Layout> Layouts for L {
-	type Handles<'h> = [RawHandle; 1];
+/// No layouts.
+unsafe impl Layouts for () {
+	type Handles<'a> = &'a [RawHandle];
 
-	type Allocated<'p, P: Pool> = P::DescriptorSet<'p, L>;
-
-	fn handles<'h>(&'h self) -> [RawHandle; 1] {
-		[self.handle()]
-	}
-
-	unsafe fn allocated_from_raw<'p, P: Pool>(pool: &'p P, handles: Vec<super::RawHandle>) -> Self::Allocated<'p, P> {
-		handles.into_iter().map(|handle| pool.wrap(handle)).next().unwrap()
-	}
-}
-
-unsafe impl<'a, L: Layout> Layouts for &'a [L] {
-	type Handles<'h> = Vec<RawHandle>;
-
-	type Allocated<'p, P: Pool> = Vec<P::DescriptorSet<'p, L>>;
-
-	fn handles<'h>(&'h self) -> Vec<RawHandle> {
-		self.iter().map(|layout| layout.handle()).collect()
-	}
-
-	unsafe fn allocated_from_raw<'p, P: Pool>(pool: &'p P, handles: Vec<super::RawHandle>) -> Self::Allocated<'p, P> {
-		handles.into_iter().map(|handle| pool.wrap(handle)).collect()
+	fn handles(&self) -> &[RawHandle] {
+		&[]
 	}
 }

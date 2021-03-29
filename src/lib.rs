@@ -44,6 +44,7 @@ pub use format::Format;
 pub use swapchain::Swapchain;
 pub use image::Image;
 pub use framebuffer::Framebuffer;
+pub use descriptor::Descriptor;
 
 pub struct Entry {
 	handle: ash::Entry,
