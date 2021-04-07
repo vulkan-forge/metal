@@ -78,6 +78,32 @@ impl Stages {
 		}
 	}
 
+	/// Creates a `Stages` struct with the vertex shader stage set to `true`.
+	#[inline]
+	pub const fn vertex_shader() -> Stages {
+		Stages {
+			vertex: true,
+			tessellation_control: false,
+			tessellation_evaluation: false,
+			geometry: false,
+			fragment: false,
+			compute: false,
+		}
+	}
+
+	/// Creates a `Stages` struct with the fragment shader stage set to `true`.
+	#[inline]
+	pub const fn fragment_shader() -> Stages {
+		Stages {
+			vertex: false,
+			tessellation_control: false,
+			tessellation_evaluation: false,
+			geometry: false,
+			fragment: true,
+			compute: false,
+		}
+	}
+
 	/// Creates a `Stages` struct with the compute stage set to `true`.
 	// TODO: add example
 	#[inline]

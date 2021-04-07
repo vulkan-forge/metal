@@ -10,7 +10,8 @@ use std::{
 use crate::{
 	OomError,
 	Device,
-	DeviceOwned
+	DeviceOwned,
+	resource
 };
 use super::{
 	task,
@@ -134,13 +135,17 @@ impl<P, F> Future<P, F> {
 	}
 }
 
-unsafe impl<P, F: Fence> future::Future for Future<P, F> {
+unsafe impl<P: task::Payload, F: Fence> future::Future for Future<P, F> {
 	fn signal_fence(&self) -> Option<&VulkanFence> {
 		Some(self.fence.handle())
 	}
+
+	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
+		self.payload.uses(resource)
+	}
 }
 
-impl<P, F: Fence> future::SignalFence for Future<P, F> {
+impl<P: task::Payload, F: Fence> future::SignalFence for Future<P, F> {
 	fn wait(self, timeout: Option<u64>) -> Result<(), WaitError> {
 		self.fence.wait(timeout)
 	}
@@ -163,7 +168,7 @@ impl<P, F, S> FutureWithSemaphore<P, F, S> {
 	}
 }
 
-unsafe impl<P, F: Fence, S: Semaphore> future::Future for FutureWithSemaphore<P, F, S> {
+unsafe impl<P: task::Payload, F: Fence, S: Semaphore> future::Future for FutureWithSemaphore<P, F, S> {
 	fn signal_semaphore(&self) -> Option<&vk::Semaphore> {
 		Some(self.semaphore.handle())
 	}
@@ -171,10 +176,14 @@ unsafe impl<P, F: Fence, S: Semaphore> future::Future for FutureWithSemaphore<P,
 	fn signal_fence(&self) -> Option<&VulkanFence> {
 		Some(self.fence.handle())
 	}
+
+	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
+		self.payload.uses(resource)
+	}
 }
 
-impl<P, F: Fence, S: Semaphore> future::SignalSemaphore for FutureWithSemaphore<P, F, S> {}
-impl<P, F: Fence, S: Semaphore> future::SignalFence for FutureWithSemaphore<P, F, S> {
+impl<P: task::Payload, F: Fence, S: Semaphore> future::SignalSemaphore for FutureWithSemaphore<P, F, S> {}
+impl<P: task::Payload, F: Fence, S: Semaphore> future::SignalFence for FutureWithSemaphore<P, F, S> {
 	fn wait(self, timeout: Option<u64>) -> Result<(), WaitError> {
 		self.fence.wait(timeout)
 	}

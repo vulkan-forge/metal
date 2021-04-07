@@ -1,5 +1,8 @@
 use ash::vk;
-use crate::pipeline;
+use crate::{
+	pipeline,
+	resource
+};
 use super::{
 	task,
 	fence
@@ -16,6 +19,8 @@ pub unsafe trait Future {
 	fn signal_fence(&self) -> Option<&vk::Fence> {
 		None
 	}
+
+	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool;
 }
 
 /// Group of GPU futures.
@@ -30,6 +35,8 @@ pub unsafe trait Futures {
 	/// 
 	/// If `None`, then each underlying future signals a semaphore.
 	fn signal_fence(&self) -> Option<&vk::Fence>;
+
+	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool;
 }
 
 unsafe impl<F: Future> Futures for F {
@@ -39,6 +46,10 @@ unsafe impl<F: Future> Futures for F {
 
 	fn signal_fence(&self) -> Option<&vk::Fence> {
 		Future::signal_fence(self)
+	}
+
+	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
+		Future::uses(self, resource)
 	}
 }
 
@@ -76,11 +87,12 @@ pub trait SignalFence: Futures {
 	}
 }
 
-pub trait SignalSemaphores {
+pub trait SignalSemaphores: Futures {
 	fn semaphores(&self) -> &[vk::Semaphore];
 
 	#[inline]
 	fn and_then_pipeline_stages_of<T: task::WaitPipelineStages>(self, task: T, wait_pipeline_stage_mask: pipeline::stage::Flags) -> task::DelayedPipelineStages<Self, T> where Self: Sized {
+		// ...
 		task::DelayedPipelineStages::new(self, task, wait_pipeline_stage_mask)
 	}
 }

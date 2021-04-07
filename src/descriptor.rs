@@ -6,11 +6,13 @@ pub mod update;
 
 pub use set::{
 	Set,
-	Sets,
-	SendSets
+	Sets
 };
 pub use pool::Pool;
-pub use update::Update;
+pub use update::{
+	Update,
+	UpdateSet
+};
 
 pub type RawImageInfo = vk::DescriptorImageInfo;
 pub type RawBufferInfo = vk::DescriptorBufferInfo;
@@ -24,7 +26,7 @@ pub unsafe trait Descriptor: Copy {
 	const COUNT: u32;
 }
 
-pub enum Write {
+pub enum WriteInfo {
 	Image(RawImageInfo),
 	Images(Vec<RawImageInfo>),
 	Buffer(RawBufferInfo),
@@ -32,24 +34,25 @@ pub enum Write {
 	// TexelBufferView // TODO
 }
 
-/// Descriptor writer.
-pub unsafe trait Writer<S: Set, D: Descriptor>: Sized where S::Layout: set::layout::HasDescriptor<D> {
+/// Descriptor write.
+pub unsafe trait Write<D: Descriptor, T>: Set where Self::Layout: set::layout::HasDescriptor<D> {
 	/// Prepares the necessary data to write to the descriptor.
 	/// 
 	/// The output gives the `Write` operation to perform
 	/// which must match the descriptor type `TYPE`.
-	fn prepare(&self) -> Write;
+	fn prepare(value: &T) -> WriteInfo;
 
-	unsafe fn apply(self, set: &mut S);
-
-	/// Directly write the descriptor of the given set.
-	fn write_to(self, set: &mut S, offset: u32) {
-		unsafe {
-			let mut update = Update::new();
-			update.write(set, offset, &self); // this is safe because `update` is dropped just after this call.
-			self.apply(set)
-		}
-	}
+	/// Assign the given value to the descriptor.
+	/// 
+	/// This function is automatically and safely called from the `write` function.
+	/// 
+	/// ## Safety
+	/// 
+	/// This does not actually write to the descriptor,
+	/// but only store the assigned value so it is not dropped before the set.
+	/// However this will release the currently/previoulsy assigned value,
+	/// which may lead to undefined behavior.
+	unsafe fn set(&mut self, value: T);
 }
 
 /// Descriptor type.
@@ -70,7 +73,7 @@ pub enum Type {
 }
 
 impl Type {
-	pub fn into_vulkan(self) -> vk::DescriptorType {
+	pub const fn into_vulkan(self) -> vk::DescriptorType {
 		vk::DescriptorType::from_raw(self as i32)
 	}
 }

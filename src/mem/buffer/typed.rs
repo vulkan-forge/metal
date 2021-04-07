@@ -8,28 +8,27 @@ use ash::{
 	vk::Handle
 };
 use crate::{
+	resource,
 	Device,
 	DeviceOwned,
 	mem::{
 		Slot,
 		HostVisible,
 		Allocator,
-		buffer,
-		Buffer,
-		TypedBuffer
+		buffer
 	}
 };
 
 /// Typed buffer.
-pub struct Typed<T> {
+pub struct Typed<T, S> {
 	inner: buffer::Unbound,
-	slot: Box<dyn Send + Slot>,
+	slot: S,
 	t: PhantomData<T>,
 	len: u64
 }
 
-impl<T> Typed<T> {
-	pub(crate) unsafe fn from_raw_parts(inner: buffer::Unbound, slot: Box<dyn Send + Slot>) -> Self {
+impl<T, S> Typed<T, S> {
+	pub(crate) unsafe fn from_raw_parts(inner: buffer::Unbound, slot: S) -> Self {
 		let len = inner.len() / std::mem::size_of::<T>() as u64;
 		Self {
 			inner,
@@ -39,8 +38,8 @@ impl<T> Typed<T> {
 		}
 	}
 
-	pub fn memory_slot(&self) -> &(dyn Send + Slot) {
-		self.slot.as_ref()
+	pub fn memory_slot(&self) -> &S {
+		&self.slot
 	}
 
 	/// Returns the number of elements in the buffer.
@@ -51,7 +50,13 @@ impl<T> Typed<T> {
 	}
 }
 
-unsafe impl<T> crate::Resource for Typed<T> {
+unsafe impl<T, S> resource::AbstractReference for Typed<T, S> {
+	fn uid(&self) -> u64 {
+		self.inner.handle().as_raw()
+	}
+}
+
+unsafe impl<T, S> resource::Reference for Typed<T, S> {
 	type Handle = vk::Buffer;
 
 	fn handle(&self) -> vk::Buffer {
@@ -59,15 +64,25 @@ unsafe impl<T> crate::Resource for Typed<T> {
 	}
 }
 
-unsafe impl<T> Buffer for Typed<T> {
-	// ...
+unsafe impl<T, S> buffer::sub::Read for Typed<T, S> {
+	fn byte_offset(&self) -> u64 {
+		0
+	}
+
+	fn byte_len(&self) -> u64 {
+		self.inner.len()
+	}
 }
 
-unsafe impl<T> TypedBuffer for Typed<T> {
+unsafe impl<T, S> buffer::sub::TypedRead for Typed<T, S> {
 	type Item = T;
+
+	fn len(&self) -> u64 {
+		self.len()
+	}
 }
 
-impl<T> DeviceOwned for Typed<T> {
+impl<T, S> DeviceOwned for Typed<T, S> {
 	fn device(&self) -> &Arc<Device> {
 		self.inner.device()
 	}

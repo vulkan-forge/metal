@@ -1,10 +1,14 @@
-use std::sync::Arc;
+use std::{
+	sync::Arc,
+	rc::Rc
+};
 use ash::{
 	vk,
 	version::DeviceV1_0
 };
 use crate::{
 	Device,
+	DeviceOwned,
 	OomError
 };
 use super::{
@@ -31,11 +35,11 @@ pub unsafe trait Pool: Sized {
 	fn reference<'a>(&'a self) -> Self::Reference<'a>;
 
 	/// Allocates new descriptor sets.
-	fn allocate<'a, 's, S: Sets<'s, Pool=Self::Reference<'a>>, V: set::Setters<'s, S>>(&'a self, layouts: S::Layouts, values: V) -> Result<S, AllocationError>;
+	fn allocate<'a, 's, V, S: Sets<'s, Pool=Self::Reference<'a>> + set::InitAllFrom<'s, V>>(&'a self, layouts: &Arc<S::Layouts>, values: V) -> Result<S, AllocationError>;
 }
 
 /// Descriptor pool reference.
-pub trait Reference {
+pub trait Reference: Clone {
 	/// Deallocate the given descriptor set.
 	/// 
 	/// Note that the pool may choose not to actually free the descriptor set
@@ -56,6 +60,7 @@ impl Reference for () {
 	}
 }
 
+#[derive(Debug)]
 pub enum CreationError {
 	OutOfMemory(OomError),
 	Fragmentation
@@ -142,16 +147,11 @@ impl Raw {
 			free
 		})
 	}
-}
 
-unsafe impl Pool for Raw {
-	type Reference<'a> = &'a Self;
-
-	fn reference(&self) -> &Self {
-		self
-	}
-
-	fn allocate<'a, 's, S: Sets<'s, Pool=Self::Reference<'a>>, V: set::Setters<'s, S>>(&'a self, layouts: S::Layouts, values: V) -> Result<S, AllocationError> {
+	/// ## Safety
+	/// 
+	/// `pool_reference` must be a reference to `self`.
+	unsafe fn allocate_with<'a, 's, V, S: Sets<'s> + set::InitAllFrom<'s, V>>(&'a self, pool_reference: S::Pool, layouts: &Arc<S::Layouts>, values: V) -> Result<S, AllocationError> {
 		use set::Layouts;
 		let layout_handles = layouts.handles();
 		let layout_handles = layout_handles.as_ref();
@@ -163,13 +163,29 @@ unsafe impl Pool for Raw {
 			..Default::default()
 		};
 
-		let handles = unsafe {
-			self.device.handle.allocate_descriptor_sets(&infos)?
-		};
+		let handles = self.device.handle.allocate_descriptor_sets(&infos)?;
 
-		Ok(unsafe {
-			values.into_descriptor_sets(self, handles)
-		})
+		Ok(S::init_from(layouts, values, pool_reference, handles))
+	}
+}
+
+impl DeviceOwned for Raw {
+	fn device(&self) -> &Arc<Device> {
+		&self.device
+	}
+}
+
+unsafe impl Pool for Raw {
+	type Reference<'a> = &'a Self;
+
+	fn reference(&self) -> &Self {
+		self
+	}
+
+	fn allocate<'a, 's, V, S: Sets<'s, Pool=Self::Reference<'a>> + set::InitAllFrom<'s, V>>(&'a self, layouts: &Arc<S::Layouts>, values: V) -> Result<S, AllocationError> {
+		unsafe {
+			self.allocate_with(self, layouts, values)
+		}
 	}
 }
 
@@ -178,6 +194,46 @@ impl<'a> Reference for &'a Raw {
 		if self.free {
 			self.device.handle.free_descriptor_sets(self.handle, &[handle])
 		}
+	}
+}
+
+unsafe impl Pool for Rc<Raw> {
+	type Reference<'a> = Rc<Raw>;
+
+	fn reference(&self) -> Rc<Raw> {
+		self.clone()
+	}
+
+	fn allocate<'a, 's, V, S: Sets<'s, Pool=Self::Reference<'a>> + set::InitAllFrom<'s, V>>(&'a self, layouts: &Arc<S::Layouts>, values: V) -> Result<S, AllocationError> {
+		unsafe {
+			self.as_ref().allocate_with(self.clone(), layouts, values)
+		}
+	}
+}
+
+impl<'a> Reference for Arc<Raw> {
+	unsafe fn free(&self, handle: set::RawHandle) {
+		self.as_ref().free(handle)
+	}
+}
+
+unsafe impl Pool for Arc<Raw> {
+	type Reference<'a> = Arc<Raw>;
+
+	fn reference(&self) -> Arc<Raw> {
+		self.clone()
+	}
+
+	fn allocate<'a, 's, V, S: Sets<'s, Pool=Self::Reference<'a>> + set::InitAllFrom<'s, V>>(&'a self, layouts: &Arc<S::Layouts>, values: V) -> Result<S, AllocationError> {
+		unsafe {
+			self.as_ref().allocate_with(self.clone(), layouts, values)
+		}
+	}
+}
+
+impl<'a> Reference for Rc<Raw> {
+	unsafe fn free(&self, handle: set::RawHandle) {
+		self.as_ref().free(handle)
 	}
 }
 

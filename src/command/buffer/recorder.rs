@@ -4,11 +4,14 @@ use ash::{
 };
 use std::{
 	sync::Arc,
-	collections::HashSet
+	collections::HashSet,
+	marker::PhantomData
 };
 use crate::{
-	resource,
-	Resource,
+	resource::{
+		self,
+		Reference
+	},
 	framebuffer,
 	Framebuffer,
 	pipeline::{
@@ -59,11 +62,11 @@ impl<'a, B: Buffer> Recorder<'a, B> {
 
 		RenderPass {
 			recorder: self,
-			sets: ()
+			layout: PhantomData
 		}
 	}
 
-	pub fn copy_buffer<S: 'a + Send + mem::Buffer, D: 'a + Send + mem::Buffer>(&mut self, src: S, dst: D, regions: &[BufferCopy]) {
+	pub fn copy_buffer<S: 'a + Send + mem::buffer::sub::Read, D: 'a + Send + mem::buffer::sub::Write>(&mut self, src: S, dst: D, regions: &[BufferCopy]) {
 		unsafe {
 			self.buffer.device().handle().cmd_copy_buffer(self.buffer.handle(), src.handle(), dst.handle(), regions)
 		}
@@ -79,16 +82,15 @@ impl<'a, B: Buffer> Recorder<'a, B> {
 pub struct RenderPass<'r, 'a, B: Buffer, L: pipeline::Layout> {
 	recorder: &'r mut Recorder<'a, B>,
 
-	/// Currently bound sets. 
-	sets: L::Sets<'a>,
+	/// Current layout
+	layout: PhantomData<L>
 }
 
 impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
-	fn into_raw_parts(self) -> (&'r mut Recorder<'a, B>, L::Sets<'a>) {
+	fn into_raw_parts(self) -> &'r mut Recorder<'a, B> {
 		let recorder = unsafe { std::ptr::read(&self.recorder) };
-		let sets = unsafe { std::ptr::read(&self.sets) };
 		std::mem::forget(self);
-		(recorder, sets)
+		recorder
 	}
 }
 
@@ -100,10 +102,9 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 	) -> RenderPass<'r, 'a, B, M>
 	where
 		M: 'a + Send + pipeline::Layout,
-		M::Sets<'a>: descriptor::SendSets<'a>,
-		T: descriptor::set::Transition<L::Sets<'a>, M::Sets<'a>>
+		T: descriptor::set::SendTransition<'a, L::Sets, M::Sets>
 	{
-		let (recorder, sets) = self.into_raw_parts();
+		let recorder = self.into_raw_parts();
 
 		unsafe {
 			recorder.buffer.device().handle().cmd_bind_descriptor_sets(
@@ -111,21 +112,18 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 				vk::PipelineBindPoint::GRAPHICS,
 				layout.handle(),
 				transition.first_set(),
-				transition.descriptor_sets(),
-				transition.dynamic_offsets()
+				transition.descriptor_sets().as_ref(),
+				transition.dynamic_offsets().as_ref()
 			)
 		};
 
 		recorder.resources.insert(layout.into());
-
-		let new_sets = transition.apply(sets);
-
-		use descriptor::SendSets;
-		recorder.resources.extend(new_sets.resources());
+		let new_sets = transition.into_send_descriptor_sets();
+		recorder.resources.extend(new_sets);
 
 		RenderPass {
 			recorder,
-			sets: new_sets
+			layout: PhantomData
 		}
 	}
 
@@ -202,7 +200,7 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 		P::Layout: pipeline::layout::CompatibleWith<L>,
 		C: pipeline::layout::push_constant::Setter<<P::Layout as pipeline::Layout>::PushConstants>,
 		V: pipeline::vertex_input::Bind<'a, P::VertexInput>,
-		I: 'a + mem::IndexBuffer<<<P::VertexInput as VertexInput>::Assembly as InputAssembly>::Topology>,
+		I: 'a + mem::buffer::sub::IndexRead<<<P::VertexInput as VertexInput>::Assembly as InputAssembly>::Topology>,
 	{
 		unsafe {
 			self.recorder.buffer.device().handle().cmd_bind_pipeline(

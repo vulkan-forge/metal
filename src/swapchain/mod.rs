@@ -14,7 +14,8 @@ use crate::{
 		self,
 		task,
 		SharingQueues
-	}
+	},
+	resource
 };
 
 pub mod surface;
@@ -274,6 +275,14 @@ impl<W> DeviceOwned for Swapchain<W> {
 /// This type contains a reference to the swapchain
 /// to ensure that it is not released while acquiring an image.
 pub struct Acquiring<W>(Arc<Inner<W>>);
+
+unsafe impl<W> task::Payload for Acquiring<W> {
+	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
+		use ash::vk::Handle;
+		let uid = resource.uid();
+		self.0.handle.as_raw() == uid || self.0.surface.handle().as_raw() == uid
+	}
+}
 
 pub struct Acquire<'a, W> {
 	swapchain: &'a mut Swapchain<W>,

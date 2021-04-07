@@ -10,7 +10,10 @@ use crate::{
 	OomError,
 	Device,
 	framebuffer,
-	Resource
+	resource::{
+		self,
+		Reference
+	}
 };
 use super::{
 	shader,
@@ -48,7 +51,7 @@ impl From<vk::Result> for CreationError {
 	}
 }
 
-pub trait GraphicsPipeline: Resource<Handle=vk::Pipeline> {
+pub trait GraphicsPipeline: resource::Reference<Handle=vk::Pipeline> {
 	type Layout: Layout;
 	type VertexInput: VertexInput;
 	type DynamicStates: DynamicStates;
@@ -188,7 +191,14 @@ impl<L: Layout, I: VertexInput, D: DynamicStates> Graphics<L, I, D> {
 	}
 }
 
-unsafe impl<L: Layout, I: VertexInput, D: DynamicStates> crate::Resource for Graphics<L, I, D> {
+unsafe impl<L: Layout, I: VertexInput, D: DynamicStates> resource::AbstractReference for Graphics<L, I, D> {
+	fn uid(&self) -> u64 {
+		use ash::vk::Handle;
+		self.handle.as_raw()
+	}
+}
+
+unsafe impl<L: Layout, I: VertexInput, D: DynamicStates> resource::Reference for Graphics<L, I, D> {
 	type Handle = vk::Pipeline;
 
 	fn handle(&self) -> vk::Pipeline {

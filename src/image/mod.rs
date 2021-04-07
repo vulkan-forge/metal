@@ -3,7 +3,8 @@ use ash::{
 };
 use crate::{
 	Format,
-	DeviceOwned
+	DeviceOwned,
+	resource
 };
 
 mod usage;
@@ -25,7 +26,7 @@ pub use view::{
 
 pub use crate::framebuffer::SampleCount;
 
-pub unsafe trait Image: crate::Resource<Handle=vk::Image> + DeviceOwned {
+pub unsafe trait Image: resource::Reference<Handle=vk::Image> + DeviceOwned {
 	fn into_view(
 		self,
 		ty: view::Type,

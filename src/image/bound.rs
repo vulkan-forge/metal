@@ -7,8 +7,8 @@ use ash::{
 use crate::{
 	Device,
 	DeviceOwned,
-	Resource,
-	mem::Slot
+	mem::Slot,
+	resource
 };
 use super::{
 	Unbound,
@@ -51,7 +51,14 @@ impl<S: Slot> DeviceOwned for Bound<S> {
 	}
 }
 
-unsafe impl<S: Slot> Resource for Bound<S> {
+unsafe impl<S: Slot> resource::AbstractReference for Bound<S> {
+	fn uid(&self) -> u64 {
+		use ash::vk::Handle;
+		self.inner.handle().as_raw()
+	}
+}
+
+unsafe impl<S: Slot> resource::Reference for Bound<S> {
 	type Handle = vk::Image;
 
 	fn handle(&self) -> vk::Image {

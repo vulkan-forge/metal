@@ -140,7 +140,7 @@ pub fn main() {
 
 	let render_pass = create_render_pass(&device, color_format);
 
-	let layout = layout::Empty::new(&device).expect("unable to create pipeline layout");
+	let layout = layout::Empty::from_device(&device).expect("unable to create pipeline layout");
 	
 	let pipeline: Arc<pipeline::Graphics<layout::Empty, (), ()>> = Arc::new(pipeline::Graphics::new(
 		&device,

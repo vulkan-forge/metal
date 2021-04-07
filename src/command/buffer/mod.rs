@@ -6,7 +6,11 @@ use std::collections::HashSet;
 use crate::{
 	resource,
 	OomError,
-	DeviceOwned
+	DeviceOwned,
+	sync::{
+		future::Futures,
+		task
+	}
 };
 
 pub mod local_recorder;
@@ -118,14 +122,22 @@ impl<'a, B: Buffer> Buffer for &'a B {
 }
 
 /// Recorded command buffer trait.
-pub unsafe trait RecordedBuffer {
+pub unsafe trait RecordedBuffer: task::Payload {
 	fn handle(&self) -> vk::CommandBuffer;
+
+	/// Validate the references owned by the command buffer against the given past.
+	fn check_borrow_rules<P: Futures>(&self, past: &P);
 }
 
 unsafe impl<'a, B: RecordedBuffer> RecordedBuffer for &'a B {
 	#[inline]
 	fn handle(&self) -> VulkanBuffer {
 		(*self).handle()
+	}
+
+	#[inline]
+	fn check_borrow_rules<P: Futures>(&self, past: &P) {
+		(*self).check_borrow_rules(past)
 	}
 }
 
@@ -145,6 +157,26 @@ unsafe impl<'a, B: Buffer> RecordedBuffer for Recorded<'a, B> {
 	fn handle(&self) -> vk::CommandBuffer {
 		self.buffer.handle()
 	}
+
+	#[inline]
+	fn check_borrow_rules<P: Futures>(&self, past: &P) {
+		for resource in &self.resources {
+			resource.check_borrow_rules(past)
+		}
+	}
+}
+
+unsafe impl<'a, B: Buffer> task::Payload for Recorded<'a, B> {
+	#[inline]
+	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
+		for r in &self.resources {
+			if r.aliases(resource) {
+				return true
+			}
+		}
+
+		false
+	}
 }
 
 pub struct LocallyRecorded<'a, B: Buffer> {
@@ -162,5 +194,25 @@ unsafe impl<'a, B: Buffer> RecordedBuffer for LocallyRecorded<'a, B> {
 	#[inline]
 	fn handle(&self) -> vk::CommandBuffer {
 		self.buffer.handle()
+	}
+
+	#[inline]
+	fn check_borrow_rules<P: Futures>(&self, past: &P) {
+		for resource in &self.resources {
+			resource.check_borrow_rules(past)
+		}
+	}
+}
+
+unsafe impl<'a, B: Buffer> task::Payload for LocallyRecorded<'a, B> {
+	#[inline]
+	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
+		for r in &self.resources {
+			if r.aliases(resource) {
+				return true
+			}
+		}
+
+		false
 	}
 }

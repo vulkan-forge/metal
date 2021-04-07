@@ -12,9 +12,6 @@ mod memory_requirements;
 pub mod staging;
 
 pub use buffer::{
-	Buffer,
-	TypedBuffer,
-	IndexBuffer,
 	Buffers,
 	LocalBuffers
 };

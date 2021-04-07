@@ -9,7 +9,8 @@ use std::{
 use crate::{
 	OomError,
 	Device,
-	DeviceOwned
+	DeviceOwned,
+	resource
 };
 use super::{
 	task,
@@ -46,13 +47,17 @@ impl<P, S> Future<P, S> {
 	}
 }
 
-unsafe impl<P, S: Semaphore> future::Future for Future<P, S> {
+unsafe impl<P: task::Payload, S: Semaphore> future::Future for Future<P, S> {
 	fn signal_semaphore(&self) -> Option<&vk::Semaphore> {
 		Some(self.semaphore.handle())
 	}
+
+	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
+		self.payload.uses(resource)
+	}
 }
 
-impl<P, S: Semaphore> future::SignalSemaphore for Future<P, S> {}
+impl<P: task::Payload, S: Semaphore> future::SignalSemaphore for Future<P, S> {}
 
 #[derive(Debug)]
 pub enum CreationError {

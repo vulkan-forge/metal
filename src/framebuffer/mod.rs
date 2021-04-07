@@ -10,7 +10,10 @@ use crate::{
 	OomError,
 	Device,
 	image,
-	Resource
+	resource::{
+		self,
+		Reference
+	}
 };
 pub mod render_pass;
 pub use render_pass::{
@@ -114,7 +117,14 @@ impl<A: AsRef<[vk::ImageView]>> Framebuffer<A> {
 	}
 }
 
-unsafe impl<A: AsRef<[vk::ImageView]>> crate::Resource for Framebuffer<A> {
+unsafe impl<A: AsRef<[vk::ImageView]>> resource::AbstractReference for Framebuffer<A> {
+	fn uid(&self) -> u64 {
+		use ash::vk::Handle;
+		self.handle.as_raw()
+	}
+}
+
+unsafe impl<A: AsRef<[vk::ImageView]>> resource::Reference for Framebuffer<A> {
 	type Handle = vk::Framebuffer;
 
 	fn handle(&self) -> vk::Framebuffer {

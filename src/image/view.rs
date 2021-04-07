@@ -5,7 +5,7 @@ use ash::{
 use crate::{
 	OomError,
 	Format,
-	Resource
+	resource
 };
 use super::{
 	Image
@@ -174,7 +174,7 @@ impl SubresourceRange {
 	}
 }
 
-pub unsafe trait View: Resource<Handle=vk::ImageView> {
+pub unsafe trait View: resource::Reference<Handle=vk::ImageView> {
 	// ...
 }
 
@@ -215,7 +215,14 @@ impl<I: Image> Raw<I> {
 	}
 }
 
-unsafe impl<I: Image> Resource for Raw<I> {
+unsafe impl<I: Image> resource::AbstractReference for Raw<I> {
+	fn uid(&self) -> u64 {
+		use ash::vk::Handle;
+		self.handle.as_raw()
+	}
+}
+
+unsafe impl<I: Image> resource::Reference for Raw<I> {
 	type Handle = vk::ImageView;
 
 	fn handle(&self) -> vk::ImageView {

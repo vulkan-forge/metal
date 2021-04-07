@@ -32,7 +32,7 @@ unsafe impl<P: future::SignalSemaphore, T: Wait> Task for Delayed<P, T> {
 		signal_semaphore: Option<&[vk::Semaphore]>,
 		signal_fence: Option<vk::Fence>,
 	) -> Result<(Self::Output, Self::Payload), Self::Error> {
-		let (output, payload) = self.task.execute(Some(std::slice::from_ref(self.past.semaphore())), signal_semaphore, signal_fence)?;
+		let (output, payload) = self.task.execute(Some(&self.past), signal_semaphore, signal_fence)?;
 		Ok((output, (self.past, payload)))
 	}
 }
@@ -65,7 +65,7 @@ unsafe impl<P: future::SignalSemaphores, T: WaitPipelineStages> Task for Delayed
 		signal_semaphore: Option<&[vk::Semaphore]>,
 		signal_fence: Option<vk::Fence>,
 	) -> Result<(Self::Output, Self::Payload), Self::Error> {
-		let (output, payload) = self.task.execute(Some(self.past.semaphores()), Some(std::slice::from_ref(&self.wait_pipeline_stage_mask)), signal_semaphore, signal_fence)?;
+		let (output, payload) = self.task.execute(Some(&self.past), Some(std::slice::from_ref(&self.wait_pipeline_stage_mask)), signal_semaphore, signal_fence)?;
 		Ok((output, (self.past, payload)))
 	}
 }

@@ -15,8 +15,6 @@ use crate::{
 		self,
 		Allocator,
 		HostVisible,
-		Buffer,
-		TypedBuffer,
 		buffer::{
 			self,
 			Usages,
@@ -25,7 +23,6 @@ use crate::{
 		},
 		staging
 	},
-	Resource,
 	sync::SharingQueues
 };
 
@@ -114,7 +111,7 @@ impl<T, A: Allocator> Vec<T, A> {
 		self.inner.as_ref().map(|inner| inner.buffer.memory_slot().ptr() as *mut T).unwrap_or(std::ptr::null_mut())
 	}
 
-	pub fn into_typed(self) -> Result<buffer::Typed<T>, Error> where A::Slot: Send {
+	pub fn into_typed(self) -> Result<buffer::Typed<T, HostVisible<A::Slot>>, Error> {
 		match self.inner {
 			Some(inner) => {
 				Ok(unsafe { inner.buffer.into_typed() })

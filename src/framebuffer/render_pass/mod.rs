@@ -12,7 +12,8 @@ use ash::{
 use crate::{
 	OomError,
 	Device,
-	DeviceOwned
+	DeviceOwned,
+	resource
 };
 
 pub mod subpass;
@@ -182,7 +183,14 @@ impl DeviceOwned for RenderPass {
 	}
 }
 
-unsafe impl crate::Resource for RenderPass {
+unsafe impl resource::AbstractReference for RenderPass {
+	fn uid(&self) -> u64 {
+		use ash::vk::Handle;
+		self.handle.as_raw()
+	}
+}
+
+unsafe impl resource::Reference for RenderPass {
 	type Handle = vk::RenderPass;
 
 	fn handle(&self) -> vk::RenderPass {

@@ -1,17 +1,16 @@
 //! Unsafe interface to descriptor sets.
 
 use std::{
-	marker::PhantomData
+	marker::PhantomData,
+	sync::Arc
 };
 use ash::vk;
 use crate::{
-	Resource,
 	resource
 };
 use super::{
 	pool,
-	Pool,
-	Descriptor
+	Pool
 };
 
 pub mod layout;
@@ -36,51 +35,124 @@ pub type RawHandle = vk::DescriptorSet;
 /// descriptor set has been allocated from.
 /// Each descriptor set instance must hold a reference to the pool it has been allocated from
 /// using this type. Such reference is provided by the `Pool::reference` function.
-pub unsafe trait Set: Sized + Resource<Handle=RawHandle> {
+pub unsafe trait Set: Sized {
 	/// Descriptor set layout.
 	type Layout: Layout;
 
 	/// Pool.
 	type Pool: pool::Reference;
 
-	/// Write the given descriptor to this descriptor set, at the given offset.
-	fn write<D: Descriptor, V>(&mut self, offset: u32, value: V) where V: super::Writer<Self, D>, Self::Layout: layout::HasDescriptor<D> {
-		value.write_to(self, offset)
+	fn write(&self, update: &mut super::UpdateSet<Self>);
+}
+
+pub struct Instance<S: Set> {
+	handle: RawHandle,
+	data: Option<S>
+}
+
+impl<S: Set> Instance<S> {
+	pub unsafe fn from_raw(handle: RawHandle) -> Self {
+		Self {
+			handle,
+			data: None
+		}
+	}
+
+	pub fn bound(&self) -> Bound<S> {
+		Bound {
+			inner: self
+		}
+	}
+
+	pub fn bound_mut(&mut self) -> BoundMut<S> {
+		BoundMut {
+			inner: self
+		}
+	}
+
+	pub(crate) fn set_data(&mut self, set: S) {
+		self.data = Some(set)
 	}
 }
 
-/// Descriptor set setter.
-/// 
-/// Allows one do write an entire set at once to define it.
-/// 
-/// ## Safety
-/// 
-/// The resources attached to the descriptor set using
-/// `into_descriptor_set` must outlive the returned descriptor set.
-pub unsafe trait Setter<S: Set> {
-	/// Converts an untyped descriptor set into
-	/// a typed descriptor sets.
-	/// 
-	/// ## Safety
-	/// 
-	/// The resources attached to the descriptor set must
-	/// outlive the descriptor set.
-	unsafe fn into_descriptor_set<'p, P: Pool<Reference<'p> = S::Pool>>(
-		self,
-		pool: &'p P,
-		handle: RawHandle
-	) -> S;
+unsafe impl<S: Set> resource::AbstractReference for Instance<S> {
+	fn uid(&self) -> u64 {
+		use ash::vk::Handle;
+		self.handle.as_raw()
+	}
 }
 
-/// Descriptor set writer.
-pub unsafe trait Writer<S: Set> {
+unsafe impl<S: Set> resource::Reference for Instance<S> {
+	type Handle = RawHandle;
+
+	fn handle(&self) -> RawHandle {
+		self.handle
+	}
+}
+
+pub struct Bound<'a, S: Set> {
+	inner: &'a Instance<S>
+}
+
+impl<'a, S: Set> AsRef<S> for Bound<'a, S> {
+	fn as_ref(&self) -> &S {
+		self.inner.data.as_ref().unwrap()
+	}
+}
+
+pub struct BoundMut<'a, S: Set> {
+	inner: &'a mut Instance<S>
+}
+
+impl<'a, S: Set> BoundMut<'a, S> {
+	/// Directly write the descriptor of the given set.
+	pub fn write<D: super::Descriptor, T>(&mut self, offset: u32, value: T) where S: super::Write<D, T>, S::Layout: layout::HasDescriptor<D> {
+		unsafe {
+			let mut update = super::Update::new();
+			let mut update_set = update.update_set(self.inner);
+			update_set.write_descriptor(offset, &value); // this is safe because `update` is dropped just after this call.
+			self.as_mut().set(value)
+		}
+	}
+}
+
+impl<'a, S: Set> AsRef<S> for BoundMut<'a, S> {
+	fn as_ref(&self) -> &S {
+		self.inner.data.as_ref().unwrap()
+	}
+}
+
+impl<'a, S: Set> AsMut<S> for BoundMut<'a, S> {
+	fn as_mut(&mut self) -> &mut S {
+		self.inner.data.as_mut().unwrap()
+	}
+}
+
+// pub unsafe trait InitFrom<T>: Set {
+// 	/// Converts an untyped descriptor set into
+// 	/// a typed descriptor sets.
+// 	/// 
+// 	/// ## Safety
+// 	/// 
+// 	/// The layout and the resources attached to the descriptor set must
+// 	/// outlive the descriptor set.
+// 	unsafe fn init_from(
+// 		layout: &Arc<Self::Layout>,
+// 		value: T,
+// 		pool: Self::Pool,
+// 		handle: RawHandle
+// 	) -> Self;
+// }
+
+/// Descriptor set write.
+pub unsafe trait Write<T>: Set {
 	/// Write this value to the descriptor set.
 	/// 
 	/// ## Safety
 	/// 
 	/// Any resource used by the descriptor set after this operation
 	/// must outlive the descriptor set.
-	fn write(self, set: &mut S);
+	fn update(&self, update: &mut super::UpdateSet<Self>);
 }
 
 /// Multiple descriptor sets.
@@ -92,54 +164,34 @@ pub unsafe trait Writer<S: Set> {
 /// 
 /// The `Pool` type must correspond to the type of pool reference
 /// from which every set has allocated from.
-pub unsafe trait Sets<'s> {
+pub unsafe trait Sets<'r> {
 	/// Descriptor set layouts.
 	type Layouts: Layouts;
 
 	/// Pool.
 	type Pool: pool::Reference;
 
-	/// Resources iterator.
-	type Resources<'a>: Iterator<Item=resource::Ref<'s>>;
-
-	/// Returns an iterator over the resources captured by the descriptor sets.
-	/// This includes the descriptor sets themselves.
-	/// 
-	/// These resources must not be released before the sets.
-	fn resources<'a>(&'a self) -> Self::Resources<'a>;
+	fn into_descriptor_sets(self) -> Vec<resource::Ref<'r>>;
 }
 
-/// Descriptor sets that are send.
-pub unsafe trait SendSets<'s>: Sets<'s> + Send {
-	/// Send resources iterator.
-	type SendResources<'a>: Iterator<Item=resource::SendRef<'s>>;
+unsafe impl<'r, S: 'r + Set> Sets<'r> for Instance<S> {
+	type Layouts = layout::Instance<S::Layout>;
 
-	/// Returns an iterator over the resources captured by the descriptor sets.
-	/// This includes the descriptor sets themselves.
-	/// 
-	/// These resources must not be released before the sets.
-	fn resources<'a>(&'a self) -> Self::SendResources<'a>;
-}
+	type Pool = S::Pool;
 
-/// No layouts.
-unsafe impl<'s> Sets<'s> for () {
-	type Layouts = ();
-
-	type Pool = ();
-
-	type Resources<'a> = std::iter::Empty<resource::Ref<'s>>;
-
-	fn resources<'a>(&'a self) -> Self::Resources<'a> {
-		std::iter::empty()
+	fn into_descriptor_sets(self) -> Vec<resource::Ref<'r>> {
+		vec!(resource::Ref::from(self))
 	}
 }
 
 /// No layouts.
-unsafe impl<'s> SendSets<'s> for () {
-	type SendResources<'a> = std::iter::Empty<resource::SendRef<'s>>;
+unsafe impl<'r> Sets<'r> for () {
+	type Layouts = ();
 
-	fn resources<'a>(&'a self) -> Self::SendResources<'a> {
-		std::iter::empty()
+	type Pool = ();
+
+	fn into_descriptor_sets(self) -> Vec<resource::Ref<'r>> {
+		vec![]
 	}
 }
 
@@ -151,33 +203,41 @@ unsafe impl<'s> SendSets<'s> for () {
 /// 
 /// The resources attached to the descriptor sets using
 /// `into_descriptor_sets` must outlive the returned descriptor sets.
-pub unsafe trait Setters<'s, S: Sets<'s>> {
+pub unsafe trait InitAllFrom<'r, T>: Sets<'r> {
 	/// Converts an untyped list of descriptor sets into
 	/// a typed array/tuple of descriptor sets.
 	/// 
 	/// ## Safety
 	/// 
-	/// The resources attached to the descriptor set must
+	/// The layouts and the resources attached to the descriptor set must
 	/// outlive the descriptor set.
-	unsafe fn into_descriptor_sets<'p, P: Pool<Reference<'p> = S::Pool>>(
-		self,
-		pool: &'p P,
+	unsafe fn init_from(
+		layouts: &Arc<Self::Layouts>,
+		values: T,
+		pool: Self::Pool,
 		handle: Vec<RawHandle>
-	) -> S;
+	) -> Self;
 }
 
 /// Describes the transition between two descriptor sets.
 /// 
 /// This trait is used to call [`vkCmdBindDescriptorSets`](https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/vkCmdBindDescriptorSets.html)
 /// with the appropriate parameters.
-pub unsafe trait Transition<A, B> {
+pub unsafe trait Transition<'r, A, B> {
+	type Handles<'a>: AsRef<[RawHandle]>;
+	type Offsets<'a>: AsRef<[u32]>;
+
 	fn first_set(&self) -> u32;
 
-	fn descriptor_sets(&self) -> &[RawHandle];
+	fn descriptor_sets<'a>(&'a self) -> Self::Handles<'a>;
 
-	fn dynamic_offsets(&self) -> &[u32];
+	fn dynamic_offsets<'a>(&'a self) -> Self::Offsets<'a>;
 
-	fn apply(self, sets: A) -> B;
+	fn into_descriptor_sets(self) -> Vec<resource::Ref<'r>>;
+}
+
+pub unsafe trait SendTransition<'r, A, B>: Transition<'r, A, B> {
+	fn into_send_descriptor_sets(self) -> Vec<resource::SendRef<'r>>;
 }
 
 /// Descriptor set of a given layout.
@@ -207,7 +267,14 @@ impl<P: pool::Reference, L: Layout> Raw<P, L> {
 	}
 }
 
-unsafe impl<P: pool::Reference, L: Layout> Resource for Raw<P, L> {
+unsafe impl<P: pool::Reference, L: Layout> resource::AbstractReference for Raw<P, L> {
+	fn uid(&self) -> u64 {
+		use ash::vk::Handle;
+		self.handle.as_raw()
+	}
+}
+
+unsafe impl<P: pool::Reference, L: Layout> resource::Reference for Raw<P, L> {
 	type Handle = RawHandle;
 
 	fn handle(&self) -> Self::Handle {

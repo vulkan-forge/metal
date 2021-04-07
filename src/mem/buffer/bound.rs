@@ -13,9 +13,9 @@ use crate::{
 		Slot,
 		HostVisible,
 		Allocator,
-		buffer,
-		Buffer
-	}
+		buffer
+	},
+	resource
 };
 use super::Typed;
 
@@ -42,8 +42,8 @@ impl<S: Slot> Bound<S> {
 		self.slot
 	}
 
-	pub unsafe fn into_typed<T>(self) -> Typed<T> where S: Send {
-		Typed::from_raw_parts(self.inner, Box::new(self.slot))
+	pub unsafe fn into_typed<T>(self) -> Typed<T, S> {
+		Typed::from_raw_parts(self.inner, self.slot)
 	}
 
 	pub fn boxed(self) -> Bound<Box<dyn Send + Slot>> where S: Send {
@@ -54,7 +54,13 @@ impl<S: Slot> Bound<S> {
 	}
 }
 
-unsafe impl<S: Slot> crate::Resource for Bound<S> {
+unsafe impl<S: Slot> resource::AbstractReference for Bound<S> {
+	fn uid(&self) -> u64 {
+		self.inner.handle().as_raw()
+	}
+}
+
+unsafe impl<S: Slot> resource::Reference for Bound<S> {
 	type Handle = vk::Buffer;
 
 	fn handle(&self) -> vk::Buffer {
@@ -62,9 +68,17 @@ unsafe impl<S: Slot> crate::Resource for Bound<S> {
 	}
 }
 
-unsafe impl<S: Slot> Buffer for Bound<S> {
-	// ...
+unsafe impl<S: Slot> buffer::sub::Read for Bound<S> {
+	fn byte_offset(&self) -> u64 {
+		0
+	}
+
+	fn byte_len(&self) -> u64 {
+		self.inner.len()
+	}
 }
+
+unsafe impl<S: Slot> buffer::sub::Write for Bound<S> {}
 
 impl<S: Slot> DeviceOwned for Bound<S> {
 	fn device(&self) -> &Arc<Device> {

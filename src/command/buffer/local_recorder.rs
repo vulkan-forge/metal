@@ -8,8 +8,10 @@ use std::{
 	marker::PhantomData
 };
 use crate::{
-	resource,
-	Resource,
+	resource::{
+		self,
+		Reference
+	},
 	framebuffer,
 	Framebuffer,
 	pipeline::{
@@ -60,11 +62,11 @@ impl<'a, B: Buffer> LocalRecorder<'a, B> {
 
 		RenderPass {
 			recorder: self,
-			sets: ()
+			layout: PhantomData
 		}
 	}
 
-	pub fn copy_buffer<S: 'a + mem::Buffer, D: 'a + mem::Buffer>(&mut self, src: S, dst: D, regions: &[BufferCopy]) {
+	pub fn copy_buffer<S: 'a + mem::buffer::sub::Read, D: 'a + mem::buffer::sub::Write>(&mut self, src: S, dst: D, regions: &[BufferCopy]) {
 		unsafe {
 			self.buffer.device().handle().cmd_copy_buffer(self.buffer.handle(), src.handle(), dst.handle(), regions)
 		}
@@ -79,15 +81,14 @@ impl<'a, B: Buffer> LocalRecorder<'a, B> {
 /// The render pass ends when the `RenderPassRecorder` is dropped.
 pub struct RenderPass<'r, 'a, B: Buffer, L: pipeline::Layout> {
 	recorder: &'r mut LocalRecorder<'a, B>,
-	sets: L::Sets<'a>
+	layout: PhantomData<L>
 }
 
 impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
-	fn into_raw_parts(self) -> (&'r mut LocalRecorder<'a, B>, L::Sets<'a>) {
+	fn into_raw_parts(self) -> &'r mut LocalRecorder<'a, B> {
 		let recorder = unsafe { std::ptr::read(&self.recorder) };
-		let sets = unsafe { std::ptr::read(&self.sets) };
 		std::mem::forget(self);
-		(recorder, sets)
+		recorder
 	}
 }
 
@@ -140,9 +141,9 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 	) -> RenderPass<'r, 'a, B, M>
 	where
 		M: 'a + pipeline::Layout,
-		T: descriptor::set::Transition<L::Sets<'a>, M::Sets<'a>>
+		T: descriptor::set::Transition<'a, L::Sets, M::Sets>
 	{
-		let (recorder, sets) = self.into_raw_parts();
+		let recorder = self.into_raw_parts();
 
 		unsafe {
 			recorder.buffer.device().handle().cmd_bind_descriptor_sets(
@@ -150,21 +151,18 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 				vk::PipelineBindPoint::GRAPHICS,
 				layout.handle(),
 				transition.first_set(),
-				transition.descriptor_sets(),
-				transition.dynamic_offsets()
+				transition.descriptor_sets().as_ref(),
+				transition.dynamic_offsets().as_ref()
 			)
 		};
 
 		recorder.resources.insert(layout.into());
-
-		let new_sets = transition.apply(sets);
-
-		use descriptor::Sets;
-		recorder.resources.extend(new_sets.resources());
+		let new_sets = transition.into_descriptor_sets();
+		recorder.resources.extend(new_sets);
 
 		RenderPass {
 			recorder,
-			sets: new_sets
+			layout: PhantomData
 		}
 	}
 }
@@ -246,7 +244,7 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout, P: pipeline::GraphicsPipeline> Pipe
 	) where
 		C: pipeline::layout::push_constant::Setter<<P::Layout as pipeline::Layout>::PushConstants>,
 		V: pipeline::vertex_input::Bind<'a, P::VertexInput>,
-		I: 'a + mem::IndexBuffer<<<P::VertexInput as VertexInput>::Assembly as InputAssembly>::Topology>,
+		I: 'a + mem::buffer::sub::IndexRead<<<P::VertexInput as VertexInput>::Assembly as InputAssembly>::Topology>,
 	{
 		unsafe {
 			for (range, data) in push_constants.ranges().as_ref() {

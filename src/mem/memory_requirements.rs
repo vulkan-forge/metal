@@ -98,4 +98,9 @@ impl MemoryRequirements {
 			linear: self.linear
 		}
 	}
+
+	#[inline]
+	pub fn host_visible(&self, physical_device: PhysicalDevice) -> MemoryRequirements {
+		self.filter_memory_types(physical_device, |memory_type| memory_type.is_host_visible())
+	}
 }

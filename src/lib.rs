@@ -1,4 +1,5 @@
 #![feature(generic_associated_types)]
+#![feature(trait_alias)]
 #[macro_use]
 extern crate log;
 #[macro_use]
@@ -34,7 +35,6 @@ pub mod descriptor;
 #[cfg(feature = "winit")]
 pub mod win;
 
-pub use resource::Resource;
 pub use instance::Instance;
 pub use device::{
 	Device,

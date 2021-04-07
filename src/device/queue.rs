@@ -16,6 +16,7 @@ use crate::{
 	sync::{
 		self,
 		task,
+		future
 	},
 	fmt
 };
@@ -153,16 +154,24 @@ unsafe impl<'a, B: command::RecordedBuffer> task::WaitPipelineStages for Submit<
 	type Error = SubmitError;
 	type Payload = B;
 
-	fn execute(
+	fn execute<P: future::SignalSemaphores>(
 		self,
-		wait_semaphores: Option<&[vk::Semaphore]>,
+		past: Option<&P>,
 		wait_pipeline_stage_mask: Option<&[pipeline::stage::Flags]>,
 		signal_semaphores: Option<&[vk::Semaphore]>,
 		signal_fence: Option<vk::Fence>,
 	) -> Result<((), Self::Payload), SubmitError> {
+		let (wait_semaphore_count, p_wait_semaphores) = match past {
+			Some(past) => {
+				self.buffer.check_borrow_rules(past);
+				(past.semaphores().len() as u32, past.semaphores().as_ptr())
+			},
+			None => (0, std::ptr::null())
+		};
+
 		let infos = vk::SubmitInfo {
-			wait_semaphore_count: wait_semaphores.map(|s| s.len() as u32).unwrap_or(0),
-			p_wait_semaphores: wait_semaphores.map(|s| s.as_ptr()).unwrap_or(std::ptr::null()),
+			wait_semaphore_count,
+			p_wait_semaphores,
 			p_wait_dst_stage_mask: wait_pipeline_stage_mask.map(|s| s.as_ptr()).unwrap_or(std::ptr::null()),
 			
 			command_buffer_count: 1,
@@ -196,19 +205,26 @@ unsafe impl<'a, W> task::Wait for Present<'a, W> {
 	type Error = PresentError;
 	type Payload = ();
 
-	fn execute(
+	fn execute<P: future::SignalSemaphores>(
 		self,
-		wait_semaphores: Option<&[vk::Semaphore]>,
+		past: Option<&P>,
 		_signal_semaphores: Option<&[vk::Semaphore]>,
 		_signal_fence: Option<vk::Fence>,
 	) -> Result<(bool, ()), PresentError> {
+		let (wait_semaphore_count, p_wait_semaphores) = match past {
+			Some(past) => {
+				(past.semaphores().len() as u32, past.semaphores().as_ptr())
+			},
+			None => (0, std::ptr::null())
+		};
+
 		let ext_khr_swapchain = self.queue.device.ext_khr_swapchain()?;
 
 		let mut result = vk::Result::SUCCESS;
 
 		let infos = vk::PresentInfoKHR {
-			wait_semaphore_count: wait_semaphores.map(|s| s.len() as u32).unwrap_or(0),
-			p_wait_semaphores: wait_semaphores.map(|s| s.as_ptr()).unwrap_or(std::ptr::null()),
+			wait_semaphore_count,
+			p_wait_semaphores,
 			swapchain_count: 1,
 			p_swapchains: &self.swapchain.handle(),
 			p_image_indices: &self.index,

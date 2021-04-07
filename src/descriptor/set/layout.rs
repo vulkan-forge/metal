@@ -8,24 +8,39 @@ use ash::{
 };
 use crate::{
 	Device,
-	Resource,
-	OomError
+	OomError,
+	pipeline::shader,
+	resource
 };
 use super::super::{
+	Type,
 	Descriptor,
 };
 
 pub type RawHandle = vk::DescriptorSetLayout;
 
-pub type Binding = vk::DescriptorSetLayoutBinding;
+#[repr(transparent)]
+pub struct Binding(vk::DescriptorSetLayoutBinding);
+
+impl Binding {
+	pub const fn new(index: u32, ty: Type, count: u32, stage_flags: shader::Stages) -> Binding {
+		Binding(vk::DescriptorSetLayoutBinding {
+			binding: index,
+			descriptor_type: ty.into_vulkan(),
+			descriptor_count: count,
+			stage_flags: stage_flags.into_vulkan(),
+			p_immutable_samplers: std::ptr::null()
+		})
+	}
+}
 
 /// Descriptor set layout.
 /// 
 /// ## Safety
 /// 
 /// The `BINDINGS` const must match the layout bindings.
-pub unsafe trait Layout: Sized + Resource<Handle=RawHandle> {
-	const BINDINGS: &'static [vk::DescriptorSetLayoutBinding];
+pub unsafe trait Layout: Sized {
+	const BINDINGS: &'static [Binding];
 }
 
 /// Layout instance, for a given device.
@@ -40,7 +55,7 @@ impl<L: Layout> Instance<L> {
 	pub fn new(device: &Arc<Device>) -> Result<Self, OomError> {
 		let infos = vk::DescriptorSetLayoutCreateInfo {
 			binding_count: L::BINDINGS.len() as u32,
-			p_bindings: L::BINDINGS.as_ptr(),
+			p_bindings: L::BINDINGS.as_ptr() as *const _,
 			..Default::default()
 		};
 
@@ -53,6 +68,10 @@ impl<L: Layout> Instance<L> {
 			handle,
 			layout: PhantomData
 		})
+	}
+
+	pub fn handle(&self) -> RawHandle {
+		self.handle
 	}
 }
 
@@ -83,6 +102,24 @@ pub unsafe trait Layouts {
 	fn handles<'a>(&'a self) -> Self::Handles<'a>;
 }
 
+/// Sets layouts compatibility marker.
+/// 
+/// This correspond to the notion of ["compatible for set N"](https://www.khronos.org/registry/vulkan/specs/1.2-extensions/html/vkspec.html#descriptorsets-compatibility)
+/// in the vulkan specification.
+pub unsafe trait CompatibleWith<L>: Layouts {
+	// ...
+}
+
+unsafe impl<L: Layouts> CompatibleWith<L> for L {}
+
+unsafe impl<L: Layout> Layouts for Instance<L> {
+	type Handles<'a> = &'a [RawHandle];
+
+	fn handles<'a>(&'a self) -> Self::Handles<'a> {
+		std::slice::from_ref(&self.handle)
+	}
+}
+
 /// No layouts.
 unsafe impl Layouts for () {
 	type Handles<'a> = &'a [RawHandle];
@@ -91,3 +128,6 @@ unsafe impl Layouts for () {
 		&[]
 	}
 }
+
+// /// The empty set layouts is compatible with anything.
+// unsafe impl<L: Layouts> CompatibleWith<L> for () {}
