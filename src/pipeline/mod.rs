@@ -1,3 +1,5 @@
+use ash::vk;
+
 pub mod shader;
 pub mod stage;
 pub mod layout;
@@ -26,11 +28,6 @@ pub use multisample::Multisample;
 pub use depth_test::DepthTest;
 pub use stencil_test::StencilTest;
 pub use color_blend::ColorBlend;
-pub use dynamic_state::{
-	DynamicState,
-	DynamicStates
-};
-pub use graphics::{
-	GraphicsPipeline,
-	Graphics
-};
+pub use graphics::Graphics;
+
+pub type Handle = vk::Pipeline;

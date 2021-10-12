@@ -1,5 +1,6 @@
 #![feature(generic_associated_types)]
 #![feature(trait_alias)]
+#![feature(generic_const_exprs)]
 #[macro_use]
 extern crate log;
 #[macro_use]

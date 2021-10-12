@@ -5,47 +5,9 @@ pub use std::{
 	}
 };
 use crate::sync::future::Futures;
-// use ash::vk::Handle;
 
-// mod ref_local;
-// mod ref_send;
-// mod ref_sync;
-// mod proxy;
-
-// pub use ref_local::Ref;
-// pub use ref_send::SendRef;
-// pub use ref_sync::SyncRef;
-// pub use proxy::Proxy;
-
-// /// GPU resource.
-// pub unsafe trait AbstractResource {
-// 	/// Unique identifier of the resource.
-// 	/// 
-// 	/// ## Safety
-// 	/// 
-// 	/// This must be unique across a given device.
-// 	fn uid(&self) -> u64;
-// }
-
-// pub unsafe trait Resource {
-// 	type Handle: Copy + Handle;
-
-// 	fn handle(&self) -> Self::Handle;
-// }
-
-// unsafe impl<B: std::ops::Deref> Resource for B where B::Target: Resource {
-// 	type Handle = <B::Target as Resource>::Handle;
-
-// 	fn handle(&self) -> Self::Handle {
-// 		self.deref().handle()
-// 	}
-// }
-
-// unsafe impl<R: Resource> AbstractResource for R {
-// 	fn uid(&self) -> u64 {
-// 		self.handle().as_raw()
-// 	}
-// }
+/// Abstract handle.
+pub trait Handle = ash::vk::Handle;
 
 pub struct Any<R: AbstractReference + ?Sized>(Box<R>);
 
@@ -187,7 +149,7 @@ unsafe impl<R: std::ops::Deref> AbstractReference for R where R::Target: Abstrac
 
 /// Resource reference.
 pub unsafe trait Reference: AbstractReference {
-	type Handle;
+	type Handle: Handle;
 
 	fn handle(&self) -> Self::Handle;
 }

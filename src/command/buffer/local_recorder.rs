@@ -99,9 +99,9 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 		dynamic_states: S
 	) -> Pipeline<'p, 'a, B, L, P>
 	where
-		P: pipeline::GraphicsPipeline,
+		P: pipeline::Graphics,
 		P::Layout: pipeline::layout::CompatibleWith<L>,
-		S: pipeline::dynamic_state::Set<P::DynamicStates>
+		S: pipeline::dynamic_state::Set<P>
 	{
 		unsafe {
 			self.recorder.buffer.device().handle().cmd_bind_pipeline(
@@ -176,13 +176,13 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> Drop for RenderPass<'r, 'a, B, L> {
 }
 
 /// Record pipeline commands.
-pub struct Pipeline<'r, 'a, B: Buffer, L: pipeline::Layout, P: pipeline::GraphicsPipeline> {
+pub struct Pipeline<'r, 'a, B: Buffer, L: pipeline::Layout, P: pipeline::Graphics> {
 	recorder: &'r mut LocalRecorder<'a, B>,
 	active_layout: PhantomData<L>,
 	active_pipeline: Arc<P>
 }
 
-impl<'r, 'a, B: Buffer, L: pipeline::Layout, P: pipeline::GraphicsPipeline> Pipeline<'r, 'a, B, L, P> {
+impl<'r, 'a, B: Buffer, L: pipeline::Layout, P: pipeline::Graphics> Pipeline<'r, 'a, B, L, P> {
 	pub fn draw<C, V>(
 		&mut self,
 		push_constants: C,

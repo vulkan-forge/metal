@@ -17,19 +17,18 @@ use crate::{
 };
 use super::{
 	shader,
+	Handle,
 	Stages,
 	Layout,
 	VertexInput,
 	InputAssembly,
 	Tesselation,
-	Viewport,
-	Scissor,
 	Rasterization,
 	Multisample,
 	DepthTest,
 	StencilTest,
 	ColorBlend,
-	DynamicStates
+	dynamic_state
 };
 
 #[derive(Debug)]
@@ -51,33 +50,116 @@ impl From<vk::Result> for CreationError {
 	}
 }
 
-pub trait GraphicsPipeline: resource::Reference<Handle=vk::Pipeline> {
+pub trait Graphics: resource::Reference<Handle=Handle> {
 	type Layout: Layout;
 	type VertexInput: VertexInput;
-	type DynamicStates: DynamicStates;
+	
+	type ViewportsScissors: dynamic_state::ViewportsScissors;
+	type Rasterization: dynamic_state::Rasterization;
+	type BlendConstants: dynamic_state::BlendConstants;
+	type DepthBounds: dynamic_state::DepthBounds;
+	type StencilTest: dynamic_state::StencilTest;
 
 	fn layout(&self) -> &Self::Layout;
 }
 
-pub struct Graphics<L: Layout, I: VertexInput, D: DynamicStates> {
+/// Raw graphics pipeline.
+/// 
+/// A "raw" graphics pipeline cannot be directly used as is.
+/// Its purpose is to be wrapped inside a newtype implementing the
+/// `Graphics` trait using the [`graphics_pipeline!`] macro.
+/// 
+/// ## Example
+/// 
+/// ```
+/// graphics_pipeline! {
+/// 	pub struct MyPipeline<Layout, VertexInput, DynamicState>;
+/// }
+/// ```
+pub struct Raw<
+	L: Layout,
+	I: VertexInput,
+	V: dynamic_state::ViewportsScissors,
+	R: dynamic_state::Rasterization,
+	B: dynamic_state::BlendConstants,
+	D: dynamic_state::DepthBounds,
+	S: dynamic_state::StencilTest
+> {
 	device: Arc<Device>,
 	render_subpass: framebuffer::render_pass::subpass::Reference,
 	handle: vk::Pipeline,
-	shaders: Vec<Arc<shader::Module>>,
+	shader_modules: Vec<Arc<shader::Module>>,
 	layout: L,
 	vertex_input: PhantomData<I>,
-	dynamic_states: PhantomData<D>
+	dynamic_states: PhantomData<(V, R, B, D, S)>
 }
 
-impl<L: Layout, I: VertexInput, D: DynamicStates> Graphics<L, I, D> {
-	/// Creates a new graphics pipeline.
-	pub fn new<S: Stages, const V: usize>(
+/// Creates a new pipeline type.
+/// 
+/// The created type will be a newtype wrapping a [`Raw`] graphics pipeline and
+/// implementing the [`Graphics`] trait with the given
+/// [`Layout`], [`VertexInput`] and [`DynamicStates`].
+/// 
+/// ## Example
+/// 
+/// ```
+/// graphics_pipeline! {
+/// 	/// My pipeline.
+/// 	pub struct MyPipeline<Layout, VertexInput, DynamicStates>;
+/// }
+/// ```
+#[macro_export]
+macro_rules! graphics_pipeline {
+	{
+		$(#[$doc:meta])*
+		$vis:vis struct $id:ident < $layout:ty, $vertex_input:ty, $dynamic_states:ty > ;
+	} => {
+		$(#[$doc])*
+		$vis struct $id($crate::pipeline::graphics::Raw<$layout, $vertex_input, $dynamic_states>);
+
+		unsafe impl $crate::resource::AbstractReference for $id {
+			fn uid(&self) -> u64 {
+				self.0.handle().as_raw()
+			}
+		}
+
+		unsafe impl $crate::resource::Reference {
+			type Handle = $crate::pipeline::Handle;
+
+			fn handle(&self) -> Self::Handle {
+				self.0.handle()
+			}
+		}
+
+		unsafe impl $crate::Graphics for $id {
+			type Layout = $layout;
+			type VertexInput = $vertex_input;
+			type DynamicStates = $dynamic_states;
+
+			fn layout(&self) -> &Self::Layout {
+				self.0.layout()
+			}
+		}
+	};
+}
+
+impl<
+	L: Layout,
+	I: VertexInput,
+	V: dynamic_state::ViewportsScissors,
+	R: dynamic_state::Rasterization,
+	B: dynamic_state::BlendConstants,
+	D: dynamic_state::DepthBounds,
+	S: dynamic_state::StencilTest
+> Raw<L, I, V, R, B, D, S> {
+	/// Creates a new raw graphics pipeline.
+	pub fn new<M: Stages>(
 		device: &Arc<Device>,
-		stages: &S,
+		stages: &M,
 		vertex_input: I,
 		tesselation: Option<Tesselation>,
-		viewports: [Viewport; V],
-		scissors: [Scissor; V],
+		viewports: <V::Viewports as dynamic_state::Viewports>::InitialType,
+		scissors: <V::Scissors as dynamic_state::Scissors>::InitialType,
 		rasterization: Rasterization,
 		multisample: Multisample,
 		depth_test: Option<DepthTest>,
@@ -85,8 +167,11 @@ impl<L: Layout, I: VertexInput, D: DynamicStates> Graphics<L, I, D> {
 		color_blend: ColorBlend,
 		layout: L,
 		render_subpass: framebuffer::render_pass::subpass::Reference
-	) -> Result<Graphics<L, I, D>, CreationError> {
-		let mut shaders = Vec::new();
+	) -> Result<Self, CreationError> {
+		use dynamic_state::viewports::InitialType as InitialViewport;
+		use dynamic_state::scissors::InitialType as InitialScissor;
+
+		let mut shader_modules = Vec::new();
 		let mut vk_stages = Vec::new();
 		stages.for_each(|stage| {
 			vk_stages.push(vk::PipelineShaderStageCreateInfo {
@@ -97,14 +182,15 @@ impl<L: Layout, I: VertexInput, D: DynamicStates> Graphics<L, I, D> {
 				..Default::default()
 			});
 
-			shaders.push(stage.entry_point.module().clone())
+			shader_modules.push(stage.entry_point.module().clone())
 		});
 
+		let viewport_count = <V::Viewports as dynamic_state::Viewports>::COUNT as u32;
 		let viewport_state = vk::PipelineViewportStateCreateInfo {
-			viewport_count: viewports.len() as u32,
-			p_viewports: viewports.as_ptr() as *const _,
-			scissor_count: scissors.len() as u32,
-			p_scissors: scissors.as_ptr() as *const _,
+			viewport_count,
+			p_viewports: viewports.ptr() as *const _,
+			scissor_count: viewport_count,
+			p_scissors: scissors.ptr() as *const _,
 			..Default::default()
 		};
 
@@ -125,7 +211,12 @@ impl<L: Layout, I: VertexInput, D: DynamicStates> Graphics<L, I, D> {
 			None
 		};
 
-		let vk_dynamic_states = D::vulkan();
+		let mut vk_dynamic_states = Vec::new();
+		V::build_vulkan_dynamic_states(&mut vk_dynamic_states);
+		R::build_vulkan_dynamic_states(&mut vk_dynamic_states);
+		D::build_vulkan_dynamic_states(&mut vk_dynamic_states);
+		B::build_vulkan_dynamic_states(&mut vk_dynamic_states);
+		S::build_vulkan_dynamic_states(&mut vk_dynamic_states);
 		let dynamic_state = vk::PipelineDynamicStateCreateInfo {
 			dynamic_state_count: vk_dynamic_states.len() as u32,
 			p_dynamic_states: vk_dynamic_states.as_ptr() as *const _,
@@ -179,56 +270,39 @@ impl<L: Layout, I: VertexInput, D: DynamicStates> Graphics<L, I, D> {
 			device: device.clone(),
 			render_subpass: render_subpass,
 			handle,
-			shaders,
+			shader_modules,
 			layout,
 			vertex_input: PhantomData,
 			dynamic_states: PhantomData
 		})
 	}
 
+	pub fn handle(&self) -> Handle {
+		self.handle
+	}
+
 	pub fn render_subpass(&self) -> &framebuffer::render_pass::subpass::Reference {
 		&self.render_subpass
 	}
-}
 
-unsafe impl<L: Layout, I: VertexInput, D: DynamicStates> resource::AbstractReference for Graphics<L, I, D> {
-	fn uid(&self) -> u64 {
-		use ash::vk::Handle;
-		self.handle.as_raw()
+	pub fn shader_modules(&self) -> &[Arc<shader::Module>] {
+		&self.shader_modules
 	}
-}
 
-unsafe impl<L: Layout, I: VertexInput, D: DynamicStates> resource::Reference for Graphics<L, I, D> {
-	type Handle = vk::Pipeline;
-
-	fn handle(&self) -> vk::Pipeline {
-		self.handle
-	}
-}
-
-impl<L: Layout, I: VertexInput, D: DynamicStates> GraphicsPipeline for Graphics<L, I, D> {
-	type Layout = L;
-	type VertexInput = I;
-	type DynamicStates = D;
-
-	fn layout(&self) -> &L {
+	pub fn layout(&self) -> &L {
 		&self.layout
 	}
 }
 
-// impl<S, D: dynamic_state::WithViewport> Graphics<D> {
-// 	pub fn set_viewports(&mut self, viewports: &[Viewport]) {
-// 		panic!("TODO")
-// 	}
-// }
-
-// impl<S, D: dynamic_state::WithViewport> Graphics<D> {
-// 	pub fn set_scissors(&mut self, scissors: &[Scissor]) {
-// 		panic!("TODO")
-// 	}
-// }
-
-impl<L: Layout, I: VertexInput, D: DynamicStates> Drop for Graphics<L, I, D> {
+impl<
+	L: Layout,
+	I: VertexInput,
+	V: dynamic_state::ViewportsScissors,
+	R: dynamic_state::Rasterization,
+	B: dynamic_state::BlendConstants,
+	D: dynamic_state::DepthBounds,
+	S: dynamic_state::StencilTest
+> Drop for Raw<L, I, V, R, B, D, S> {
 	fn drop(&mut self) {
 		unsafe {
 			self.device.handle().destroy_pipeline(self.handle, None)

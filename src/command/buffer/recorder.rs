@@ -137,7 +137,7 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 		first_vertex: u32,
 		first_instance: u32
 	) where
-		P: pipeline::GraphicsPipeline,
+		P: pipeline::Graphics,
 		P::Layout: pipeline::layout::CompatibleWith<L>,
 		C: pipeline::layout::push_constant::Setter<<P::Layout as pipeline::Layout>::PushConstants>,
 		V: pipeline::vertex_input::Bind<'a, P::VertexInput>
@@ -196,7 +196,7 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 		vertex_offset: i32,
 		first_instance: u32
 	) where
-		P: pipeline::GraphicsPipeline,
+		P: pipeline::Graphics,
 		P::Layout: pipeline::layout::CompatibleWith<L>,
 		C: pipeline::layout::push_constant::Setter<<P::Layout as pipeline::Layout>::PushConstants>,
 		V: pipeline::vertex_input::Bind<'a, P::VertexInput>,

@@ -60,7 +60,7 @@ impl Rasterization {
 		cull_mode: CullMode,
 		front_face: FrontFace,
 		depth_bias: Option<DepthBias>,
-		line_width: f32
+		line_width: Option<f32>
 	) -> Rasterization {
 		let (depth_bias_enable, depth_bias_constant_factor, depth_bias_clamp, depth_bias_slope_factor) = 
 			depth_bias.map(|d| (vk::TRUE, d.constant_factor, d.clamp, d.slope_factor))
@@ -76,7 +76,7 @@ impl Rasterization {
 			depth_bias_constant_factor,
 			depth_bias_clamp,
 			depth_bias_slope_factor,
-			line_width,
+			line_width: line_width.unwrap_or(0.0),
 			..Default::default()
 		})
 	}
