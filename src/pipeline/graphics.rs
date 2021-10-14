@@ -98,24 +98,48 @@ pub struct Raw<
 /// 
 /// The created type will be a newtype wrapping a [`Raw`] graphics pipeline and
 /// implementing the [`Graphics`] trait with the given
-/// [`Layout`], [`VertexInput`] and [`DynamicStates`].
+/// [`Layout`], [`VertexInput`] and dynamic states.
 /// 
 /// ## Example
 /// 
 /// ```
 /// graphics_pipeline! {
 /// 	/// My pipeline.
-/// 	pub struct MyPipeline<Layout, VertexInput, DynamicStates>;
+/// 	pub struct MyPipeline {
+/// 		type Layout = MyLayout;
+/// 		type VertexInput = MyVertexInput;
+/// 		type ViewportsScissors = MyViewportsScissors;
+/// 		type ColorBlend = MyColorBlend;
+/// 		type Rasterization = MyRasterization;
+/// 		type DepthBounds = MyDepthBounds;
+/// 		type StencilTest = MyStencilTest;
+/// 	}
 /// }
 /// ```
 #[macro_export]
 macro_rules! graphics_pipeline {
 	{
 		$(#[$doc:meta])*
-		$vis:vis struct $id:ident < $layout:ty, $vertex_input:ty, $dynamic_states:ty > ;
+		$vis:vis struct $id:ident {
+			type Layout = $layout:ty;
+			type VertexInput = $vertex_input:ty;
+			type ViewportsScissors = $viewports_scissors:ty;
+			type ColorBlend = $color_blend:ty;
+			type Rasterization = $rasterization:ty;
+			type DepthBounds = $depth_bounds:ty;
+			type StencilTest = $stencil_test:ty
+		}
 	} => {
 		$(#[$doc])*
-		$vis struct $id($crate::pipeline::graphics::Raw<$layout, $vertex_input, $dynamic_states>);
+		$vis struct $id($crate::pipeline::graphics::Raw<
+			$layout,
+			$vertex_input,
+			$viewports_scissors,
+			$color_blend,
+			$rasterization,
+			$depth_bounds,
+			$stencil_test
+		>);
 
 		unsafe impl $crate::resource::AbstractReference for $id {
 			fn uid(&self) -> u64 {
@@ -134,7 +158,11 @@ macro_rules! graphics_pipeline {
 		unsafe impl $crate::Graphics for $id {
 			type Layout = $layout;
 			type VertexInput = $vertex_input;
-			type DynamicStates = $dynamic_states;
+			type ViewportsScissors = $viewports_scissors;
+			type ColorBlend = $color_blend;
+			type Rasterization = $rasterization;
+			type DepthBounds = $depth_bounds;
+			type StencilTest = $stencil_test;
 
 			fn layout(&self) -> &Self::Layout {
 				self.0.layout()
