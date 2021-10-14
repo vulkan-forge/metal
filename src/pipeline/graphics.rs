@@ -127,7 +127,7 @@ macro_rules! graphics_pipeline {
 			type ColorBlend = $color_blend:ty;
 			type Rasterization = $rasterization:ty;
 			type DepthBounds = $depth_bounds:ty;
-			type StencilTest = $stencil_test:ty
+			type StencilTest = $stencil_test:ty;
 		}
 	} => {
 		$(#[$doc])*
