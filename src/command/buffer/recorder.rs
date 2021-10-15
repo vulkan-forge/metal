@@ -102,7 +102,7 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 	) -> RenderPass<'r, 'a, B, M>
 	where
 		M: 'a + Send + pipeline::Layout,
-		T: descriptor::set::SendTransition<'a, L::Sets, M::Sets>
+		T: descriptor::set::SendTransition<'a, L::DescriptorSets, M::DescriptorSets>
 	{
 		let recorder = self.into_raw_parts();
 
@@ -127,125 +127,125 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 		}
 	}
 
-	pub fn draw<P, C, V>(
-		&mut self,
-		pipeline: &Arc<P>,
-		push_constants: C,
-		vertex_input: V,
-		vertex_count: u32,
-		instance_count: u32,
-		first_vertex: u32,
-		first_instance: u32
-	) where
-		P: pipeline::Graphics,
-		P::Layout: pipeline::layout::CompatibleWith<L>,
-		C: pipeline::layout::push_constant::Setter<<P::Layout as pipeline::Layout>::PushConstants>,
-		V: pipeline::vertex_input::Bind<'a, P::VertexInput>
-	{
-		unsafe {
-			self.recorder.buffer.device().handle().cmd_bind_pipeline(
-				self.recorder.buffer.handle(),
-				vk::PipelineBindPoint::GRAPHICS,
-				pipeline.handle()
-			);
+	// pub fn draw<P, C, V>(
+	// 	&mut self,
+	// 	pipeline: &Arc<P>,
+	// 	push_constants: C,
+	// 	vertex_input: V,
+	// 	vertex_count: u32,
+	// 	instance_count: u32,
+	// 	first_vertex: u32,
+	// 	first_instance: u32
+	// ) where
+	// 	P: pipeline::Graphics,
+	// 	P::Layout: pipeline::layout::CompatibleWith<L>,
+	// 	C: pipeline::layout::push_constant::Setter<<P::Layout as pipeline::Layout>::PushConstants>,
+	// 	V: pipeline::vertex_input::Bind<'a, P::VertexInput>
+	// {
+	// 	unsafe {
+	// 		self.recorder.buffer.device().handle().cmd_bind_pipeline(
+	// 			self.recorder.buffer.handle(),
+	// 			vk::PipelineBindPoint::GRAPHICS,
+	// 			pipeline.handle()
+	// 		);
 
-			for (range, data) in push_constants.ranges().as_ref() {
-				self.recorder.buffer.device().handle().cmd_push_constants(
-					self.recorder.buffer.handle(),
-					pipeline.layout().handle(),
-					range.0.stage_flags,
-					range.0.offset,
-					std::slice::from_raw_parts(*data, range.0.size as usize)
-				)
-			}
+	// 		for (range, data) in push_constants.ranges().as_ref() {
+	// 			self.recorder.buffer.device().handle().cmd_push_constants(
+	// 				self.recorder.buffer.handle(),
+	// 				pipeline.layout().handle(),
+	// 				range.0.stage_flags,
+	// 				range.0.offset,
+	// 				std::slice::from_raw_parts(*data, range.0.size as usize)
+	// 			)
+	// 		}
 
-			let (first_binding, vertex_buffers, offsets) = vertex_input.get();
-			if !vertex_buffers.is_empty() {
-				self.recorder.buffer.device().handle().cmd_bind_vertex_buffers(
-					self.recorder.buffer.handle(),
-					first_binding,
-					vertex_buffers.as_vulkan(),
-					offsets.as_ref()
-				);
-			}
+	// 		let (first_binding, vertex_buffers, offsets) = vertex_input.get();
+	// 		if !vertex_buffers.is_empty() {
+	// 			self.recorder.buffer.device().handle().cmd_bind_vertex_buffers(
+	// 				self.recorder.buffer.handle(),
+	// 				first_binding,
+	// 				vertex_buffers.as_vulkan(),
+	// 				offsets.as_ref()
+	// 			);
+	// 		}
 
-			self.recorder.buffer.device().handle().cmd_draw(
-				self.recorder.buffer.handle(),
-				vertex_count,
-				instance_count,
-				first_vertex,
-				first_instance
-			)
-		}
-	}
+	// 		self.recorder.buffer.device().handle().cmd_draw(
+	// 			self.recorder.buffer.handle(),
+	// 			vertex_count,
+	// 			instance_count,
+	// 			first_vertex,
+	// 			first_instance
+	// 		)
+	// 	}
+	// }
 
-	/// Note: when using list topologies (`PointList`, `LineList` and `TriangleList`), 
-	/// `index_count` is the number of element in that list (the number of points/lines/faces).
-	/// For instance, if the topology is `TriangleList`,
-	/// then `index_count` must be the number of input indexes divided by 3.
-	pub fn draw_indexed<P, C, V, I>(
-		&mut self,
-		pipeline: &Arc<P>,
-		push_constants: C,
-		vertex_input: V,
-		index_buffer: I,
-		offset: u64,
-		index_count: u32,
-		instance_count: u32,
-		first_index: u32,
-		vertex_offset: i32,
-		first_instance: u32
-	) where
-		P: pipeline::Graphics,
-		P::Layout: pipeline::layout::CompatibleWith<L>,
-		C: pipeline::layout::push_constant::Setter<<P::Layout as pipeline::Layout>::PushConstants>,
-		V: pipeline::vertex_input::Bind<'a, P::VertexInput>,
-		I: 'a + mem::buffer::sub::IndexRead<<<P::VertexInput as VertexInput>::Assembly as InputAssembly>::Topology>,
-	{
-		unsafe {
-			self.recorder.buffer.device().handle().cmd_bind_pipeline(
-				self.recorder.buffer.handle(),
-				vk::PipelineBindPoint::GRAPHICS,
-				pipeline.handle()
-			);
+	// /// Note: when using list topologies (`PointList`, `LineList` and `TriangleList`), 
+	// /// `index_count` is the number of element in that list (the number of points/lines/faces).
+	// /// For instance, if the topology is `TriangleList`,
+	// /// then `index_count` must be the number of input indexes divided by 3.
+	// pub fn draw_indexed<P, C, V, I>(
+	// 	&mut self,
+	// 	pipeline: &Arc<P>,
+	// 	push_constants: C,
+	// 	vertex_input: V,
+	// 	index_buffer: I,
+	// 	offset: u64,
+	// 	index_count: u32,
+	// 	instance_count: u32,
+	// 	first_index: u32,
+	// 	vertex_offset: i32,
+	// 	first_instance: u32
+	// ) where
+	// 	P: pipeline::Graphics,
+	// 	P::Layout: pipeline::layout::CompatibleWith<L>,
+	// 	C: pipeline::layout::push_constant::Setter<<P::Layout as pipeline::Layout>::PushConstants>,
+	// 	V: pipeline::vertex_input::Bind<'a, P::VertexInput>,
+	// 	I: 'a + mem::buffer::sub::IndexRead<<<P::VertexInput as VertexInput>::Assembly as InputAssembly>::Topology>,
+	// {
+	// 	unsafe {
+	// 		self.recorder.buffer.device().handle().cmd_bind_pipeline(
+	// 			self.recorder.buffer.handle(),
+	// 			vk::PipelineBindPoint::GRAPHICS,
+	// 			pipeline.handle()
+	// 		);
 
-			for (range, data) in push_constants.ranges().as_ref() {
-				self.recorder.buffer.device().handle().cmd_push_constants(
-					self.recorder.buffer.handle(),
-					pipeline.layout().handle(),
-					range.0.stage_flags,
-					range.0.offset,
-					std::slice::from_raw_parts(*data, range.0.size as usize)
-				)
-			}
+	// 		for (range, data) in push_constants.ranges().as_ref() {
+	// 			self.recorder.buffer.device().handle().cmd_push_constants(
+	// 				self.recorder.buffer.handle(),
+	// 				pipeline.layout().handle(),
+	// 				range.0.stage_flags,
+	// 				range.0.offset,
+	// 				std::slice::from_raw_parts(*data, range.0.size as usize)
+	// 			)
+	// 		}
 
-			let (first_binding, vertex_buffers, offsets) = vertex_input.get();
-			if !vertex_buffers.is_empty() {
-				self.recorder.buffer.device().handle().cmd_bind_vertex_buffers(
-					self.recorder.buffer.handle(),
-					first_binding,
-					vertex_buffers.as_vulkan(),
-					offsets.as_ref()
-				);
-			}
+	// 		let (first_binding, vertex_buffers, offsets) = vertex_input.get();
+	// 		if !vertex_buffers.is_empty() {
+	// 			self.recorder.buffer.device().handle().cmd_bind_vertex_buffers(
+	// 				self.recorder.buffer.handle(),
+	// 				first_binding,
+	// 				vertex_buffers.as_vulkan(),
+	// 				offsets.as_ref()
+	// 			);
+	// 		}
 
-			self.recorder.buffer.device().handle().cmd_bind_index_buffer(
-				self.recorder.buffer.handle(),
-				index_buffer.handle(),
-				offset,
-				index_buffer.index_type()
-			);
+	// 		self.recorder.buffer.device().handle().cmd_bind_index_buffer(
+	// 			self.recorder.buffer.handle(),
+	// 			index_buffer.handle(),
+	// 			offset,
+	// 			index_buffer.index_type()
+	// 		);
 
-			self.recorder.buffer.device().handle().cmd_draw_indexed(
-				self.recorder.buffer.handle(),
-				index_count * index_buffer.index_per_item(),
-				instance_count,
-				first_index,
-				vertex_offset,
-				first_instance
-			)
-		}
-	}
+	// 		self.recorder.buffer.device().handle().cmd_draw_indexed(
+	// 			self.recorder.buffer.handle(),
+	// 			index_count * index_buffer.index_per_item(),
+	// 			instance_count,
+	// 			first_index,
+	// 			vertex_offset,
+	// 			first_instance
+	// 		)
+	// 	}
+	// }
 }
 
 impl<'r, 'a, B: Buffer, L: pipeline::Layout> Drop for RenderPass<'r, 'a, B, L> {

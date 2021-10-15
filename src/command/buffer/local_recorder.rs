@@ -93,14 +93,14 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 }
 
 impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
-	pub fn bind_pipeline<'p, P, S>(
+	/// Bind a new pipeline.
+	pub fn bind_pipeline<'p, P, S, T>(
 		&'p mut self,
 		pipeline: &Arc<P>,
 		dynamic_states: S
-	) -> Pipeline<'p, 'a, B, L, P>
+	) -> Pipeline<'p, 'a, B, P>
 	where
-		P: pipeline::Graphics,
-		P::Layout: pipeline::layout::CompatibleWith<L>,
+		P: pipeline::Graphics<Layout=T>,
 		S: pipeline::dynamic_state::Set<P>
 	{
 		unsafe {
@@ -129,7 +129,6 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 
 		Pipeline {
 			recorder: self.recorder,
-			active_layout: PhantomData,
 			active_pipeline: pipeline.clone()
 		}
 	}
@@ -141,7 +140,7 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 	) -> RenderPass<'r, 'a, B, M>
 	where
 		M: 'a + pipeline::Layout,
-		T: descriptor::set::Transition<'a, L::Sets, M::Sets>
+		T: descriptor::set::Transition<'a, L::DescriptorSets, M::DescriptorSets>
 	{
 		let recorder = self.into_raw_parts();
 
@@ -176,13 +175,34 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> Drop for RenderPass<'r, 'a, B, L> {
 }
 
 /// Record pipeline commands.
-pub struct Pipeline<'r, 'a, B: Buffer, L: pipeline::Layout, P: pipeline::Graphics> {
+pub struct Pipeline<'r, 'a, B: Buffer, P: pipeline::Graphics> {
 	recorder: &'r mut LocalRecorder<'a, B>,
-	active_layout: PhantomData<L>,
 	active_pipeline: Arc<P>
 }
 
-impl<'r, 'a, B: Buffer, L: pipeline::Layout, P: pipeline::Graphics> Pipeline<'r, 'a, B, L, P> {
+impl<'r, 'a, B: Buffer, P: pipeline::Graphics> Pipeline<'r, 'a, B, P> {
+	pub fn bind_descriptor_sets<T>(
+		&mut self,
+		transition: T
+	)
+	where
+		T: descriptor::set::Transition<'a, <P::Layout as pipeline::Layout>::DescriptorSets, <P::Layout as pipeline::Layout>::DescriptorSets>
+	{
+		unsafe {
+			self.recorder.buffer.device().handle().cmd_bind_descriptor_sets(
+				self.recorder.buffer.handle(),
+				vk::PipelineBindPoint::GRAPHICS,
+				self.active_pipeline.layout().handle(),
+				transition.first_set(),
+				transition.descriptor_sets().as_ref(),
+				transition.dynamic_offsets().as_ref()
+			)
+		};
+
+		let new_sets = transition.into_descriptor_sets();
+		self.recorder.resources.extend(new_sets);
+	}
+
 	pub fn draw<C, V>(
 		&mut self,
 		push_constants: C,

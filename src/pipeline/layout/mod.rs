@@ -32,16 +32,16 @@ impl From<vk::Result> for CreationError {
 	}
 }
 
-pub type VulkanLayout = vk::PipelineLayout;
+pub type Handle = vk::PipelineLayout;
 
-pub unsafe trait Layout: resource::Reference<Handle=VulkanLayout> {
+pub unsafe trait Layout: resource::Reference<Handle=Handle> {
 	type PushConstants: PushConstants;
-	type Sets: descriptor::set::Layouts;
+	type DescriptorSets: descriptor::set::Layouts;
 }
 
 unsafe impl<L: std::ops::Deref> Layout for L where L::Target: Layout {
 	type PushConstants = <L::Target as Layout>::PushConstants;
-	type Sets = <L::Target as Layout>::Sets;
+	type DescriptorSets = <L::Target as Layout>::DescriptorSets;
 }
 
 /// Layout without descriptor sets.
@@ -56,15 +56,15 @@ impl<P: PushConstants> NoSets<P> {
 /// Empty layout.
 pub type Empty = NoSets<()>;
 
-/// Layout compatibility marker.
-/// 
-/// This correspond to the notion of ["compatible for set N"](https://www.khronos.org/registry/vulkan/specs/1.2-extensions/html/vkspec.html#descriptorsets-compatibility)
-/// in the vulkan specification.
-pub unsafe trait CompatibleWith<L>: Layout {
-	// ...
-}
+// /// Layout compatibility marker.
+// /// 
+// /// This correspond to the notion of ["compatible for set N"](https://www.khronos.org/registry/vulkan/specs/1.2-extensions/html/vkspec.html#descriptorsets-compatibility)
+// /// in the vulkan specification.
+// pub unsafe trait CompatibleWith<L>: Layout {
+// 	// ...
+// }
 
-unsafe impl<P: PushConstants, L: Layout<PushConstants=P>, M: Layout<PushConstants=P>> CompatibleWith<L> for M where L::Sets: descriptor::set::layout::CompatibleWith<M::Sets> {}
+// unsafe impl<P: PushConstants, L: Layout<PushConstants=P>, M: Layout<PushConstants=P>> CompatibleWith<L> for M where L::DescriptorSets: descriptor::set::layout::CompatibleWith<M::DescriptorSets> {}
 
 pub struct Raw<C: PushConstants, S: descriptor::set::Layouts> {
 	device: Arc<Device>,
@@ -120,16 +120,16 @@ unsafe impl<P: PushConstants, S: descriptor::set::Layouts> resource::AbstractRef
 }
 
 unsafe impl<P: PushConstants, S: descriptor::set::Layouts> resource::Reference for Raw<P, S> {
-	type Handle = VulkanLayout;
+	type Handle = Handle;
 
-	fn handle(&self) -> VulkanLayout {
+	fn handle(&self) -> Handle {
 		self.handle()
 	}
 }
 
 unsafe impl<P: PushConstants, S: descriptor::set::Layouts> Layout for Raw<P, S> {
 	type PushConstants = P;
-	type Sets = S;
+	type DescriptorSets = S;
 }
 
 impl<C: PushConstants, S: descriptor::set::Layouts> Drop for Raw<C, S> {
@@ -138,4 +138,55 @@ impl<C: PushConstants, S: descriptor::set::Layouts> Drop for Raw<C, S> {
 			self.device.handle().destroy_pipeline_layout(self.handle, None)
 		}
 	}
+}
+
+/// Creates a new pipeline layout type.
+/// 
+/// The created type will be a newtype wrapping a [`Raw`] pipeline layout and
+/// implementing the [`Layout`] trait.
+/// 
+/// ## Example
+/// 
+/// ```
+/// pipeline_layout! {
+/// 	/// My pipeline layout.
+/// 	pub struct MyLayout {
+/// 		// ...
+/// 	}
+/// }
+/// ```
+#[macro_export]
+macro_rules! pipeline_layout {
+	{
+		$(#[$doc:meta])*
+		$vis:vis struct $id:ident {
+			type PushConstants = $push_constants:ty;
+			type DescriptorSets = $descriptor_sets:ty;
+		}
+	} => {
+		$(#[$doc])*
+		$vis struct $id($crate::pipeline::layout::Raw<
+			$push_constants,
+			$descriptor_sets
+		>);
+
+		unsafe impl $crate::resource::AbstractReference for $id {
+			fn uid(&self) -> u64 {
+				self.0.handle().as_raw()
+			}
+		}
+
+		unsafe impl $crate::resource::Reference for $id {
+			type Handle = $crate::pipeline::layout::Handle;
+
+			fn handle(&self) -> Self::Handle {
+				self.0.handle()
+			}
+		}
+
+		unsafe impl $crate::Layout for $id {
+			type PushConstants = $push_constants;
+			type DescriptorSets = $descriptor_sets;
+		}
+	};
 }

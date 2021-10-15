@@ -48,14 +48,14 @@ pub trait Reference: Clone {
 	/// ## Safety
 	/// 
 	/// The descriptor set must not be owned or borrowed.
-	unsafe fn free(&self, handle: set::RawHandle);
+	unsafe fn free(&self, handle: set::Handle);
 }
 
 /// No pool reference.
 /// 
 /// This is usefull for the only sets that do not require allocation: the empty sets.
 impl Reference for () {
-	unsafe fn free(&self, _handle: set::RawHandle) {
+	unsafe fn free(&self, _handle: set::Handle) {
 		panic!("trying to free an empty descriptor set")
 	}
 }
@@ -190,7 +190,7 @@ unsafe impl Pool for Raw {
 }
 
 impl<'a> Reference for &'a Raw {
-	unsafe fn free(&self, handle: set::RawHandle) {
+	unsafe fn free(&self, handle: set::Handle) {
 		if self.free {
 			self.device.handle.free_descriptor_sets(self.handle, &[handle])
 		}
@@ -212,7 +212,7 @@ unsafe impl Pool for Rc<Raw> {
 }
 
 impl<'a> Reference for Arc<Raw> {
-	unsafe fn free(&self, handle: set::RawHandle) {
+	unsafe fn free(&self, handle: set::Handle) {
 		self.as_ref().free(handle)
 	}
 }
@@ -232,7 +232,7 @@ unsafe impl Pool for Arc<Raw> {
 }
 
 impl<'a> Reference for Rc<Raw> {
-	unsafe fn free(&self, handle: set::RawHandle) {
+	unsafe fn free(&self, handle: set::Handle) {
 		self.as_ref().free(handle)
 	}
 }

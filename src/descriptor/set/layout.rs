@@ -1,6 +1,5 @@
 use std::{
-	sync::Arc,
-	marker::PhantomData
+	sync::Arc
 };
 use ash::{
 	vk,
@@ -14,10 +13,10 @@ use crate::{
 };
 use super::super::{
 	Type,
-	Descriptor,
+	// Descriptor,
 };
 
-pub type RawHandle = vk::DescriptorSetLayout;
+pub type Handle = vk::DescriptorSetLayout;
 
 #[repr(transparent)]
 pub struct Binding(vk::DescriptorSetLayoutBinding);
@@ -35,27 +34,95 @@ impl Binding {
 }
 
 /// Descriptor set layout.
+pub trait Layout: resource::Reference<Handle=Handle> {}
+
+/// Creates a descriptor set layout from a
+/// list of bindings declared with the following syntax:
 /// 
-/// ## Safety
+/// ```text
+/// n [count] : type => [shader_stage_1, ..., shader_stage_k]
+/// ```
 /// 
-/// The `BINDINGS` const must match the layout bindings.
-pub unsafe trait Layout: Sized {
-	const BINDINGS: &'static [Binding];
+/// If `count` is `1`, then `[1]` can be omitted.
+/// 
+/// ## Example
+/// 
+/// ```
+/// use magma::descriptor::Type;
+/// use magma::pipeline::shader::Stage;
+/// 
+/// descriptor_set_layout! {
+///   pub struct MyDescriptorSetLayout {
+///     0 : Type::UniformBuffer => [Stage::Vertex],
+///     1 : Type::Sampler => [Stage::Fragment]
+///   }
+/// }
+/// ```
+#[macro_export]
+macro_rules! descriptor_set_layout {
+	{
+		$vis:vis struct $id:ident {
+			$($loc:literal $([$count:literal])* : $ty:expr => [$($stage:expr),*]),*
+		}
+	} => {
+		$vis struct $id($crate::descriptor::set::layout::Raw);
+
+		unsafe impl $crate::resource::AbstractReference for $id {
+			fn uid(&self) -> u64 {
+				self.0.handle().as_raw()
+			}
+		}
+
+		unsafe impl $crate::resource::Reference {
+			type Handle = $crate::descriptor::set::layout::Handle;
+
+			fn handle(&self) -> Self::Handle {
+				self.0.handle()
+			}
+		}
+
+		impl $crate::descriptor::set::Layout for $id {
+			pub fn new(device: std::sync::Arc<$crate::Device>) -> Self {
+				Self($crate::descriptor::set::layout::Raw::new(
+					device,
+					&[
+						$(
+							Binding::new($loc, $ty, descriptor_set_layout(@count $($count)*), [$($stage),*].into_iter().collect())
+						),*
+					]
+				))
+			}
+		}
+	};
+	(@count [$count:literal]) => { $count };
+	(@count) => { 1 }
 }
 
-/// Layout instance, for a given device.
-pub struct Instance<L: Layout> {
+/// Typed descriptor set layout.
+pub trait TypedLayout {
+	/// The untyped layout.
+	type Untyped;
+}
+
+/// Property of a typed layout having a binding
+/// at location `N`.
+pub unsafe trait Bound<const N: u32> {
+	/// Binding type.
+	type Type;
+}
+
+/// Raw layout instance.
+pub struct Raw {
 	device: Arc<Device>,
-	handle: RawHandle,
-	layout: PhantomData<L>
+	handle: Handle
 }
 
-impl<L: Layout> Instance<L> {
+impl Raw {
 	/// Create a new layout instance for the given device.
-	pub fn new(device: &Arc<Device>) -> Result<Self, OomError> {
+	pub fn new(device: &Arc<Device>, bindings: &[Binding]) -> Result<Self, OomError> {
 		let infos = vk::DescriptorSetLayoutCreateInfo {
-			binding_count: L::BINDINGS.len() as u32,
-			p_bindings: L::BINDINGS.as_ptr() as *const _,
+			binding_count: bindings.len() as u32,
+			p_bindings: bindings.as_ptr() as *const _,
 			..Default::default()
 		};
 
@@ -63,19 +130,18 @@ impl<L: Layout> Instance<L> {
 			device.handle().create_descriptor_set_layout(&infos, None)?
 		};
 
-		Ok(Instance {
+		Ok(Self {
 			device: device.clone(),
-			handle,
-			layout: PhantomData
+			handle
 		})
 	}
 
-	pub fn handle(&self) -> RawHandle {
+	pub fn handle(&self) -> Handle {
 		self.handle
 	}
 }
 
-impl<L: Layout> Drop for Instance<L> {
+impl Drop for Raw {
 	fn drop(&mut self) {
 		unsafe {
 			self.device.handle().destroy_descriptor_set_layout(self.handle, None);
@@ -83,11 +149,11 @@ impl<L: Layout> Drop for Instance<L> {
 	}
 }
 
-/// Property for a given layout having defining the given descriptor.
-pub unsafe trait HasDescriptor<D: Descriptor> {
-	/// Descriptor binding.
-	const BINDING: u32;
-}
+// /// Property for a given layout having defining the given descriptor.
+// pub unsafe trait HasDescriptor<D: Descriptor> {
+// 	/// Descriptor binding.
+// 	const BINDING: u32;
+// }
 
 /// List of desctriptor set layouts.
 /// 
@@ -97,7 +163,7 @@ pub unsafe trait HasDescriptor<D: Descriptor> {
 /// whose layout type `L` parameter matches the associated layout.
 pub unsafe trait Layouts {
 	/// Layout handles.
-	type Handles<'a>: AsRef<[RawHandle]>;
+	type Handles<'a>: AsRef<[Handle]>;
 
 	fn handles<'a>(&'a self) -> Self::Handles<'a>;
 }
@@ -112,19 +178,19 @@ pub unsafe trait CompatibleWith<L>: Layouts {
 
 unsafe impl<L: Layouts> CompatibleWith<L> for L {}
 
-unsafe impl<L: Layout> Layouts for Instance<L> {
-	type Handles<'a> = &'a [RawHandle];
+unsafe impl<L: Layout> Layouts for L {
+	type Handles<'a> = [Handle; 1];
 
 	fn handles<'a>(&'a self) -> Self::Handles<'a> {
-		std::slice::from_ref(&self.handle)
+		[self.handle()]
 	}
 }
 
 /// No layouts.
 unsafe impl Layouts for () {
-	type Handles<'a> = &'a [RawHandle];
+	type Handles<'a> = &'a [Handle];
 
-	fn handles(&self) -> &[RawHandle] {
+	fn handles(&self) -> &[Handle] {
 		&[]
 	}
 }

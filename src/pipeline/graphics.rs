@@ -50,7 +50,7 @@ impl From<vk::Result> for CreationError {
 	}
 }
 
-pub trait Graphics: resource::Reference<Handle=Handle> {
+pub unsafe trait Graphics: resource::Reference<Handle=Handle> {
 	type Layout: Layout;
 	type VertexInput: VertexInput;
 	
@@ -128,6 +128,7 @@ macro_rules! graphics_pipeline {
 			type Rasterization = $rasterization:ty;
 			type DepthBounds = $depth_bounds:ty;
 			type StencilTest = $stencil_test:ty;
+			type RenderPass = $render_pass:ty;
 		}
 	} => {
 		$(#[$doc])*
@@ -147,7 +148,7 @@ macro_rules! graphics_pipeline {
 			}
 		}
 
-		unsafe impl $crate::resource::Reference {
+		unsafe impl $crate::resource::Reference for $id {
 			type Handle = $crate::pipeline::Handle;
 
 			fn handle(&self) -> Self::Handle {
