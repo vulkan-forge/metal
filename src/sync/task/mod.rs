@@ -18,50 +18,50 @@ pub use delayed::*;
 pub use map::*;
 
 pub unsafe trait Payload {
-	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool;
+	// fn uses(&self, resource: &dyn resource::AbstractReference) -> bool;
 }
 
 unsafe impl Payload for () {
-	fn uses(&self, _resource: &dyn resource::AbstractReference) -> bool {
-		false
-	}
+	// fn uses(&self, _resource: &dyn resource::AbstractReference) -> bool {
+	// 	false
+	// }
 }
 
 unsafe impl<A: future::Futures, B: Payload> Payload for (A, B) {
-	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
-		self.0.uses(resource) || self.1.uses(resource)
-	}
+	// fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
+	// 	self.0.uses(resource) || self.1.uses(resource)
+	// }
 }
 
 unsafe impl<'a, T: Payload> Payload for &'a T {
-	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
-		(*self).uses(resource)
-	}
+	// fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
+	// 	(*self).uses(resource)
+	// }
 }
 
-pub struct SinglePayload<T: resource::AbstractReference> {
-	resource: T
-}
+// pub struct SinglePayload<T: resource::AbstractReference> {
+// 	resource: T
+// }
 
-unsafe impl<T: resource::AbstractReference> Payload for SinglePayload<T> {
-	fn uses(&self, other: &dyn resource::AbstractReference) -> bool {
-		resource::aliases(&self.resource, other)
-	}
-}
+// unsafe impl<T: resource::AbstractReference> Payload for SinglePayload<T> {
+// 	// fn uses(&self, other: &dyn resource::AbstractReference) -> bool {
+// 	// 	resource::aliases(&self.resource, other)
+// 	// }
+// }
 
-impl<T: resource::AbstractReference> std::ops::Deref for SinglePayload<T> {
-	type Target = T;
+// impl<T: resource::AbstractReference> std::ops::Deref for SinglePayload<T> {
+// 	type Target = T;
 
-	fn deref(&self) -> &T {
-		&self.resource
-	}
-}
+// 	fn deref(&self) -> &T {
+// 		&self.resource
+// 	}
+// }
 
-impl<T: resource::AbstractReference> std::ops::DerefMut for SinglePayload<T> {
-	fn deref_mut(&mut self) -> &mut T {
-		&mut self.resource
-	}
-}
+// impl<T: resource::AbstractReference> std::ops::DerefMut for SinglePayload<T> {
+// 	fn deref_mut(&mut self) -> &mut T {
+// 		&mut self.resource
+// 	}
+// }
 
 pub unsafe trait Task: Sized {
 	/// The output value of the task, returned when the task starts.

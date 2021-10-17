@@ -34,12 +34,12 @@ impl<W> DeviceOwned for Image<W> {
 	}
 }
 
-unsafe impl<W> resource::AbstractReference for Image<W> {
-	fn uid(&self) -> u64 {
-		use ash::vk::Handle;
-		self.handle.as_raw()
-	}
-}
+// unsafe impl<W> resource::AbstractReference for Image<W> {
+// 	fn uid(&self) -> u64 {
+// 		use ash::vk::Handle;
+// 		self.handle.as_raw()
+// 	}
+// }
 
 unsafe impl<W> resource::Reference for Image<W> {
 	type Handle = vk::Image;

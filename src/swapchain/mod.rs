@@ -277,11 +277,11 @@ impl<W> DeviceOwned for Swapchain<W> {
 pub struct Acquiring<W>(Arc<Inner<W>>);
 
 unsafe impl<W> task::Payload for Acquiring<W> {
-	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
-		use ash::vk::Handle;
-		let uid = resource.uid();
-		self.0.handle.as_raw() == uid || self.0.surface.handle().as_raw() == uid
-	}
+	// fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
+	// 	use ash::vk::Handle;
+	// 	let uid = resource.uid();
+	// 	self.0.handle.as_raw() == uid || self.0.surface.handle().as_raw() == uid
+	// }
 }
 
 pub struct Acquire<'a, W> {

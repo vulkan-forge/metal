@@ -52,9 +52,9 @@ unsafe impl<P: task::Payload, S: Semaphore> future::Future for Future<P, S> {
 		Some(self.semaphore.handle())
 	}
 
-	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
-		self.payload.uses(resource)
-	}
+	// fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
+	// 	self.payload.uses(resource)
+	// }
 }
 
 impl<P: task::Payload, S: Semaphore> future::SignalSemaphore for Future<P, S> {}

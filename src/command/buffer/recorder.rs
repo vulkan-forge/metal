@@ -30,14 +30,14 @@ use super::{
 
 pub struct Recorder<'a, B: Buffer> {
 	pub(crate) buffer: B,
-	pub(crate) resources: HashSet<resource::SendRef<'a>>
+	pub(crate) lft: PhantomData<&'a ()>
 }
 
 impl<'a, B: Buffer> Recorder<'a, B> {
 	pub fn begin_render_pass<'r, A: AsRef<[vk::ImageView]> + Send + Sync + 'static, C: pipeline::layout::PushConstants>(
 		&'r mut self,
-		render_pass: &Arc<framebuffer::RenderPass>,
-		framebuffer: &Arc<Framebuffer<A>>,
+		render_pass: &'a framebuffer::RenderPass,
+		framebuffer: &'a Framebuffer<A>,
 		(x, y, width, height): (i32, i32, u32, u32),
 		clear_values: &[format::ClearValue]
 	) -> RenderPass<'r, 'a, B, pipeline::layout::NoSets<C>> {
@@ -57,8 +57,8 @@ impl<'a, B: Buffer> Recorder<'a, B> {
 			self.buffer.device().handle().cmd_begin_render_pass(self.buffer.handle(), &infos, vk::SubpassContents::INLINE)
 		}
 
-		self.resources.insert(render_pass.clone().into());
-		self.resources.insert(framebuffer.clone().into());
+		// self.resources.insert(render_pass.clone().into());
+		// self.resources.insert(framebuffer.clone().into());
 
 		RenderPass {
 			recorder: self,
@@ -71,8 +71,8 @@ impl<'a, B: Buffer> Recorder<'a, B> {
 			self.buffer.device().handle().cmd_copy_buffer(self.buffer.handle(), src.handle(), dst.handle(), regions)
 		}
 
-		self.resources.insert(src.into());
-		self.resources.insert(dst.into());
+		// self.resources.insert(src.into());
+		// self.resources.insert(dst.into());
 	}
 }
 
@@ -97,12 +97,12 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 	pub fn bind_descriptor_sets<M, T>(
 		self,
-		layout: M,
-		transition: T
+		layout: &'a M,
+		transition: &'a T
 	) -> RenderPass<'r, 'a, B, M>
 	where
 		M: 'a + Send + pipeline::Layout,
-		T: descriptor::set::SendTransition<'a, L::DescriptorSets, M::DescriptorSets>
+		T: descriptor::set::Transition<'a, L::DescriptorSets, M::DescriptorSets>
 	{
 		let recorder = self.into_raw_parts();
 
@@ -117,9 +117,9 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 			)
 		};
 
-		recorder.resources.insert(layout.into());
-		let new_sets = transition.into_send_descriptor_sets();
-		recorder.resources.extend(new_sets);
+		// recorder.resources.insert(layout.into());
+		// let new_sets = transition.into_send_descriptor_sets();
+		// recorder.resources.extend(new_sets);
 
 		RenderPass {
 			recorder,

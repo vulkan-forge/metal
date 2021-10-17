@@ -11,14 +11,17 @@
 //! 
 //! Magma is highly inspired by vulkano, but closer to the original vulkan API
 //! and including more static checks.
-
+//! 
+//! ## Safety
+//! 
+//! Shader module signatures are unsafe.
+//! Descriptor set transitions are unsafe.
 #![feature(generic_associated_types)]
 #![feature(trait_alias)]
 #![feature(generic_const_exprs)]
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate static_assertions;
+
+#[doc(hidden)]
+pub use ::core;
 
 use std::{
 	error::Error,
@@ -55,7 +58,10 @@ pub use device::{
 	Device,
 	DeviceOwned
 };
-pub use format::Format;
+pub use format::{
+	Format,
+	FormattedType
+};
 pub use swapchain::Swapchain;
 pub use image::Image;
 pub use framebuffer::Framebuffer;
@@ -88,7 +94,7 @@ impl Entry {
 					},
 					None => {
 						let name = c_name.to_str().expect("validation layer name is not UTF-8 encoded");
-						warn!("unknown validation layer `{}`", name)
+						log::warn!("unknown validation layer `{}`", name)
 					}
 				}
 			}
@@ -109,7 +115,7 @@ impl Entry {
 					},
 					None => {
 						let name = c_name.to_str().expect("instance extension name is not UTF-8 encoded");
-						warn!("unknown instance extension `{}`", name)
+						log::warn!("unknown instance extension `{}`", name)
 					}
 				}
 			}

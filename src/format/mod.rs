@@ -8,6 +8,38 @@ mod clear_value;
 
 pub use clear_value::ClearValue;
 
+/// type that can safely be interpreted with the
+/// given format.
+/// 
+/// ## Safety
+/// 
+/// The type **must** be follow the layout
+/// defined by the `FORMAT` constant.
+pub unsafe trait FormattedType: Copy {
+	const FORMAT: Format;
+}
+
+macro_rules! formatted_types {
+	($($ty:ty : $format:ident),*) => {
+		$(
+			unsafe impl FormattedType for $ty {
+				const FORMAT : Format = Format::$format;
+			}
+		)*
+	};
+}
+
+formatted_types! {
+	f32 : R32Sfloat,
+	[f32; 2] : R32G32Sfloat,
+	[f32; 3] : R32G32B32Sfloat,
+	[f32; 4] : R32G32B32A32Sfloat,
+	f64 : R64Sfloat,
+	[f64; 2] : R64G64Sfloat,
+	[f64; 3] : R64G64B64Sfloat,
+	[f64; 4] : R64G64B64A64Sfloat
+}
+
 /// The properties of an image format that are supported by a physical device.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct FormatProperties {

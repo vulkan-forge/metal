@@ -40,7 +40,7 @@ pub trait Layout: resource::Reference<Handle=Handle> {}
 /// list of bindings declared with the following syntax:
 /// 
 /// ```text
-/// n [count] : type => [shader_stage_1, ..., shader_stage_k]
+/// n => type [count] (shader_stage_1, ..., shader_stage_k)
 /// ```
 /// 
 /// If `count` is `1`, then `[1]` can be omitted.
@@ -53,8 +53,8 @@ pub trait Layout: resource::Reference<Handle=Handle> {}
 /// 
 /// descriptor_set_layout! {
 ///   pub struct MyDescriptorSetLayout {
-///     0 : Type::UniformBuffer => [Stage::Vertex],
-///     1 : Type::Sampler => [Stage::Fragment]
+///     0 => UniformBuffer (Vertex),
+///     1 => Sampler => (Fragment)
 ///   }
 /// }
 /// ```
@@ -62,18 +62,12 @@ pub trait Layout: resource::Reference<Handle=Handle> {}
 macro_rules! descriptor_set_layout {
 	{
 		$vis:vis struct $id:ident {
-			$($loc:literal $([$count:literal])* : $ty:expr => [$($stage:expr),*]),*
+			$($loc:literal => $ty:ident $([$count:literal])* ($($stage:ident),*)),*
 		}
 	} => {
 		$vis struct $id($crate::descriptor::set::layout::Raw);
 
-		unsafe impl $crate::resource::AbstractReference for $id {
-			fn uid(&self) -> u64 {
-				self.0.handle().as_raw()
-			}
-		}
-
-		unsafe impl $crate::resource::Reference {
+		unsafe impl $crate::resource::Reference for $id {
 			type Handle = $crate::descriptor::set::layout::Handle;
 
 			fn handle(&self) -> Self::Handle {
@@ -81,27 +75,32 @@ macro_rules! descriptor_set_layout {
 			}
 		}
 
-		impl $crate::descriptor::set::Layout for $id {
-			pub fn new(device: std::sync::Arc<$crate::Device>) -> Self {
-				Self($crate::descriptor::set::layout::Raw::new(
+		impl $crate::descriptor::set::Layout for $id {}
+
+		impl $id {
+			pub fn new(device: &std::sync::Arc<$crate::Device>) -> Result<Self, $crate::OomError> {
+				Ok(Self($crate::descriptor::set::layout::Raw::new(
 					device,
 					&[
 						$(
-							Binding::new($loc, $ty, descriptor_set_layout(@count $($count)*), [$($stage),*].into_iter().collect())
+							$crate::descriptor::set::layout::Binding::new(
+								$loc,
+								$crate::descriptor::Type::$ty,
+								$crate::descriptor_set_layout!(@count $([$count])*),
+								$crate::core::iter::IntoIterator::into_iter([
+									$(
+										$crate::pipeline::shader::Stage::$stage
+									),*
+								]).collect()
+							)
 						),*
 					]
-				))
+				)?))
 			}
 		}
 	};
 	(@count [$count:literal]) => { $count };
 	(@count) => { 1 }
-}
-
-/// Typed descriptor set layout.
-pub trait TypedLayout {
-	/// The untyped layout.
-	type Untyped;
 }
 
 /// Property of a typed layout having a binding
@@ -159,24 +158,65 @@ impl Drop for Raw {
 /// 
 /// ## Safety
 /// 
-/// The `Allocated` type must be an array/tuple of `DescriptorSet` types
-/// whose layout type `L` parameter matches the associated layout.
+/// The handles **must** never change and refer to valid
+/// descriptor set layouts.
 pub unsafe trait Layouts {
-	/// Layout handles.
 	type Handles<'a>: AsRef<[Handle]>;
 
-	fn handles<'a>(&'a self) -> Self::Handles<'a>;
+	fn handles(&self) -> Self::Handles<'_>;
 }
 
-/// Sets layouts compatibility marker.
+/// Creates a list of descriptor set layouts.
 /// 
-/// This correspond to the notion of ["compatible for set N"](https://www.khronos.org/registry/vulkan/specs/1.2-extensions/html/vkspec.html#descriptorsets-compatibility)
-/// in the vulkan specification.
-pub unsafe trait CompatibleWith<L>: Layouts {
-	// ...
+/// ## Example
+/// 
+/// ```
+/// descriptor_set_layouts! {
+///   pub struct MyDescriptorSetLayouts {
+///     0 : MySet0Layout,
+///     1 : MySet1Layout
+///   }
+/// }
+/// ```
+#[macro_export]
+macro_rules! descriptor_set_layouts {
+	{
+		$vis:vis struct $id:ident {
+			$($loc:literal : $ty:ty),*
+		}
+	} => {
+		$vis struct $id {
+			layouts: (
+				$(std::sync::Arc<$ty>),*
+			),
+			handles: [
+				$crate::descriptor::set::layout::Handle;
+				$crate::descriptor_set_layouts!(@count [$($loc),*])
+			]
+		}
+
+		unsafe impl $crate::descriptor::set::Layouts for $id {
+			type Handles<'a> = &'a [$crate::descriptor::set::layout::Handle];
+
+			fn handles(&self) -> &[$crate::descriptor::set::layout::Handle] {
+				&self.handles
+			}
+		}
+	};
+	(@count []) => { 0usize };
+	(@count [$a:literal]) => { 1usize };
+	(@count [$a:literal, $($b:literal),+]) => { 1usize + $crate::descriptor_set_layouts!(@count [$($b),+]) };
 }
 
-unsafe impl<L: Layouts> CompatibleWith<L> for L {}
+// /// Sets layouts compatibility marker.
+// /// 
+// /// This correspond to the notion of ["compatible for set N"](https://www.khronos.org/registry/vulkan/specs/1.2-extensions/html/vkspec.html#descriptorsets-compatibility)
+// /// in the vulkan specification.
+// pub unsafe trait CompatibleWith<L>: Layouts {
+// 	// ...
+// }
+
+// unsafe impl<L: Layouts> CompatibleWith<L> for L {}
 
 unsafe impl<L: Layout> Layouts for L {
 	type Handles<'a> = [Handle; 1];

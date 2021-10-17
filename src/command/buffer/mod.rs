@@ -2,7 +2,10 @@ use ash::{
 	vk,
 	version::DeviceV1_0
 };
-use std::collections::HashSet;
+use std::{
+	collections::HashSet,
+	marker::PhantomData
+};
 use crate::{
 	resource,
 	OomError,
@@ -13,10 +16,10 @@ use crate::{
 	}
 };
 
-pub mod local_recorder;
+// pub mod local_recorder;
 mod recorder;
 
-pub use local_recorder::LocalRecorder;
+// pub use local_recorder::LocalRecorder;
 pub use recorder::Recorder;
 
 #[derive(Debug)]
@@ -57,7 +60,10 @@ pub type VulkanBuffer = vk::CommandBuffer;
 pub trait Buffer: Sized + DeviceOwned {
 	fn handle(&self) -> VulkanBuffer;
 
-	fn record<'a, F>(self, f: F) -> Result<Recorded<'a, Self>, RecordError> where F: FnOnce(&mut Recorder<'a, Self>) -> (), Self: Send {
+	/// Record this command buffer using the given resources.
+	/// 
+	/// The resources are captured by the recorded buffer until it is executed or dropped.
+	fn record<R, F>(self, resources: R, f: F) -> Result<Recorded<Self, R>, RecordError> where F: for<'a> FnOnce(&mut Recorder<'a, Self>, &'a R) -> (), Self: Send {
 		let infos = vk::CommandBufferBeginInfo {
 			flags: vk::CommandBufferUsageFlags::empty(), // TODO
 			p_inheritance_info: std::ptr::null(), // no inheritance for primary buffers.
@@ -70,10 +76,10 @@ pub trait Buffer: Sized + DeviceOwned {
 
 		let mut recorder = Recorder {
 			buffer: self,
-			resources: HashSet::new()
+			lft: PhantomData
 		};
 
-		f(&mut recorder);
+		f(&mut recorder, &resources);
 
 		unsafe {
 			recorder.buffer.device().handle().end_command_buffer(recorder.buffer.handle())?
@@ -81,37 +87,37 @@ pub trait Buffer: Sized + DeviceOwned {
 
 		Ok(Recorded {
 			buffer: recorder.buffer,
-			resources: recorder.resources
+			resources
 		})
 	}
 
-	fn record_local<'a, F>(self, f: F) -> Result<LocallyRecorded<'a, Self>, RecordError> where F: FnOnce(&mut LocalRecorder<'a, Self>) -> () {
-		let infos = vk::CommandBufferBeginInfo {
-			flags: vk::CommandBufferUsageFlags::empty(), // TODO
-			p_inheritance_info: std::ptr::null(), // no inheritance for primary buffers.
-			..Default::default()
-		};
+	// fn record_local<'a, F>(self, f: F) -> Result<LocallyRecorded<'a, Self>, RecordError> where F: FnOnce(&mut LocalRecorder<'a, Self>) -> () {
+	// 	let infos = vk::CommandBufferBeginInfo {
+	// 		flags: vk::CommandBufferUsageFlags::empty(), // TODO
+	// 		p_inheritance_info: std::ptr::null(), // no inheritance for primary buffers.
+	// 		..Default::default()
+	// 	};
 
-		unsafe {
-			self.device().handle().begin_command_buffer(self.handle(), &infos)?
-		}
+	// 	unsafe {
+	// 		self.device().handle().begin_command_buffer(self.handle(), &infos)?
+	// 	}
 
-		let mut recorder = LocalRecorder {
-			buffer: self,
-			resources: HashSet::new()
-		};
+	// 	let mut recorder = LocalRecorder {
+	// 		buffer: self,
+	// 		resources: HashSet::new()
+	// 	};
 
-		f(&mut recorder);
+	// 	f(&mut recorder);
 
-		unsafe {
-			recorder.buffer.device().handle().end_command_buffer(recorder.buffer.handle())?
-		}
+	// 	unsafe {
+	// 		recorder.buffer.device().handle().end_command_buffer(recorder.buffer.handle())?
+	// 	}
 
-		Ok(LocallyRecorded {
-			buffer: recorder.buffer,
-			resources: recorder.resources
-		})
-	}
+	// 	Ok(LocallyRecorded {
+	// 		buffer: recorder.buffer,
+	// 		resources: recorder.resources
+	// 	})
+	// }
 }
 
 impl<'a, B: Buffer> Buffer for &'a B {
@@ -125,8 +131,8 @@ impl<'a, B: Buffer> Buffer for &'a B {
 pub unsafe trait RecordedBuffer: task::Payload {
 	fn handle(&self) -> vk::CommandBuffer;
 
-	/// Validate the references owned by the command buffer against the given past.
-	fn check_borrow_rules<P: Futures>(&self, past: &P);
+	// /// Validate the references owned by the command buffer against the given past.
+	// fn check_borrow_rules<P: Futures>(&self, past: &P);
 }
 
 unsafe impl<'a, B: RecordedBuffer> RecordedBuffer for &'a B {
@@ -135,84 +141,88 @@ unsafe impl<'a, B: RecordedBuffer> RecordedBuffer for &'a B {
 		(*self).handle()
 	}
 
-	#[inline]
-	fn check_borrow_rules<P: Futures>(&self, past: &P) {
-		(*self).check_borrow_rules(past)
-	}
+	// #[inline]
+	// fn check_borrow_rules<P: Futures>(&self, past: &P) {
+	// 	(*self).check_borrow_rules(past)
+	// }
 }
 
-pub struct Recorded<'a, B: Buffer> {
+pub struct Recorded<B: Buffer, R> {
 	buffer: B,
-	resources: HashSet<resource::SendRef<'a>>
+	resources: R
 }
 
-impl<'a, B: Buffer> Recorded<'a, B> {
-	pub fn resources(&self) -> &HashSet<resource::SendRef<'a>> {
+impl<B: Buffer, R> Recorded<B, R> {
+	// pub fn resources(&self) -> &HashSet<resource::SendRef<'a>> {
+	// 	&self.resources
+	// }
+
+	pub fn resources(&self) -> &R {
 		&self.resources
 	}
 }
 
-unsafe impl<'a, B: Buffer> RecordedBuffer for Recorded<'a, B> {
+unsafe impl<B: Buffer, R> RecordedBuffer for Recorded<B, R> {
 	#[inline]
 	fn handle(&self) -> vk::CommandBuffer {
 		self.buffer.handle()
 	}
 
-	#[inline]
-	fn check_borrow_rules<P: Futures>(&self, past: &P) {
-		for resource in &self.resources {
-			resource.check_borrow_rules(past)
-		}
-	}
+	// #[inline]
+	// fn check_borrow_rules<P: Futures>(&self, past: &P) {
+	// 	for resource in &self.resources {
+	// 		resource.check_borrow_rules(past)
+	// 	}
+	// }
 }
 
-unsafe impl<'a, B: Buffer> task::Payload for Recorded<'a, B> {
-	#[inline]
-	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
-		for r in &self.resources {
-			if r.aliases(resource) {
-				return true
-			}
-		}
+unsafe impl<B: Buffer, R> task::Payload for Recorded<B, R> {
+	// #[inline]
+	// fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
+	// 	for r in &self.resources {
+	// 		if r.aliases(resource) {
+	// 			return true
+	// 		}
+	// 	}
 
-		false
-	}
+	// 	false
+	// }
 }
 
-pub struct LocallyRecorded<'a, B: Buffer> {
-	buffer: B,
-	resources: HashSet<resource::Ref<'a>>
-}
+// pub struct LocallyRecorded<'a, B: Buffer> {
+// 	buffer: B,
+// 	resources: HashSet<resource::Ref<'a>>
+// }
 
-impl<'a, B: Buffer> LocallyRecorded<'a, B> {
-	pub fn resources(&self) -> &HashSet<resource::Ref<'a>> {
-		&self.resources
-	}
-}
+// impl<'a, B: Buffer> LocallyRecorded<'a, B> {
+// 	pub fn resources(&self) -> &HashSet<resource::Ref<'a>> {
+// 		&self.resources
+// 	}
+// }
 
-unsafe impl<'a, B: Buffer> RecordedBuffer for LocallyRecorded<'a, B> {
-	#[inline]
-	fn handle(&self) -> vk::CommandBuffer {
-		self.buffer.handle()
-	}
+// unsafe impl<'a, B: Buffer> RecordedBuffer for LocallyRecorded<'a, B> {
+// 	#[inline]
+// 	fn handle(&self) -> vk::CommandBuffer {
+// 		self.buffer.handle()
+// 	}
 
-	#[inline]
-	fn check_borrow_rules<P: Futures>(&self, past: &P) {
-		for resource in &self.resources {
-			resource.check_borrow_rules(past)
-		}
-	}
-}
+// 	#[inline]
+// 	fn check_borrow_rules<P: Futures>(&self, past: &P) {
+// 		for resource in &self.resources {
+// 			resource.check_borrow_rules(past)
+// 		}
+// 	}
+// }
 
-unsafe impl<'a, B: Buffer> task::Payload for LocallyRecorded<'a, B> {
-	#[inline]
-	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
-		for r in &self.resources {
-			if r.aliases(resource) {
-				return true
-			}
-		}
+// unsafe impl<'a, B: Buffer> task::Payload for LocallyRecorded<'a, B> {
+// 	#[inline]
+// 	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
+// 		for r in &self.resources {
+// 			if r.aliases(resource) {
+// 				return true
+// 			}
+// 		}
 
-		false
-	}
-}
+// 		false
+// 	}
+// }

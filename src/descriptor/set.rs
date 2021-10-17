@@ -167,7 +167,7 @@ pub unsafe trait Sets<'r> {
 	/// Pool.
 	type Pool: pool::Reference;
 
-	fn into_descriptor_sets(self) -> Vec<resource::Ref<'r>>;
+	// fn into_descriptor_sets(self) -> Vec<resource::Ref<'r>>;
 }
 
 // unsafe impl<'r, S: 'r + Set> Sets<'r> for Instance<S> {
@@ -229,12 +229,12 @@ pub unsafe trait Transition<'r, A, B> {
 
 	fn dynamic_offsets<'a>(&'a self) -> Self::Offsets<'a>;
 
-	fn into_descriptor_sets(self) -> Vec<resource::Ref<'r>>;
+	// fn into_descriptor_sets(self) -> Vec<resource::Ref<'r>>;
 }
 
-pub unsafe trait SendTransition<'r, A, B>: Transition<'r, A, B> {
-	fn into_send_descriptor_sets(self) -> Vec<resource::SendRef<'r>>;
-}
+// pub unsafe trait SendTransition<'r, A, B>: Transition<'r, A, B> {
+// 	fn into_send_descriptor_sets(self) -> Vec<resource::SendRef<'r>>;
+// }
 
 /// Descriptor set of a given layout.
 pub struct Raw<P: pool::Reference, L: Layout> {
@@ -263,12 +263,12 @@ impl<P: pool::Reference, L: Layout> Raw<P, L> {
 	}
 }
 
-unsafe impl<P: pool::Reference, L: Layout> resource::AbstractReference for Raw<P, L> {
-	fn uid(&self) -> u64 {
-		use ash::vk::Handle;
-		self.handle.as_raw()
-	}
-}
+// unsafe impl<P: pool::Reference, L: Layout> resource::AbstractReference for Raw<P, L> {
+// 	fn uid(&self) -> u64 {
+// 		use ash::vk::Handle;
+// 		self.handle.as_raw()
+// 	}
+// }
 
 unsafe impl<P: pool::Reference, L: Layout> resource::Reference for Raw<P, L> {
 	type Handle = Handle;

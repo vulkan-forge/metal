@@ -154,6 +154,7 @@ unsafe impl<'a, B: command::RecordedBuffer> task::WaitPipelineStages for Submit<
 	type Error = SubmitError;
 	type Payload = B;
 
+	/// Submit the recorded command buffer.
 	fn execute<P: future::SignalSemaphores>(
 		self,
 		past: Option<&P>,
@@ -163,7 +164,7 @@ unsafe impl<'a, B: command::RecordedBuffer> task::WaitPipelineStages for Submit<
 	) -> Result<((), Self::Payload), SubmitError> {
 		let (wait_semaphore_count, p_wait_semaphores) = match past {
 			Some(past) => {
-				self.buffer.check_borrow_rules(past);
+				// self.buffer.check_borrow_rules(past);
 				(past.semaphores().len() as u32, past.semaphores().as_ptr())
 			},
 			None => (0, std::ptr::null())

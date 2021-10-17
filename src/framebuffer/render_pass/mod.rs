@@ -183,12 +183,12 @@ impl DeviceOwned for RenderPass {
 	}
 }
 
-unsafe impl resource::AbstractReference for RenderPass {
-	fn uid(&self) -> u64 {
-		use ash::vk::Handle;
-		self.handle.as_raw()
-	}
-}
+// unsafe impl resource::AbstractReference for RenderPass {
+// 	fn uid(&self) -> u64 {
+// 		use ash::vk::Handle;
+// 		self.handle.as_raw()
+// 	}
+// }
 
 unsafe impl resource::Reference for RenderPass {
 	type Handle = vk::RenderPass;

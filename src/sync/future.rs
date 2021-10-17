@@ -20,7 +20,7 @@ pub unsafe trait Future {
 		None
 	}
 
-	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool;
+	// fn uses(&self, resource: &dyn resource::AbstractReference) -> bool;
 }
 
 /// Group of GPU futures.
@@ -36,7 +36,7 @@ pub unsafe trait Futures {
 	/// If `None`, then each underlying future signals a semaphore.
 	fn signal_fence(&self) -> Option<&vk::Fence>;
 
-	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool;
+	// fn uses(&self, resource: &dyn resource::AbstractReference) -> bool;
 }
 
 unsafe impl<F: Future> Futures for F {
@@ -48,9 +48,9 @@ unsafe impl<F: Future> Futures for F {
 		Future::signal_fence(self)
 	}
 
-	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
-		Future::uses(self, resource)
-	}
+	// fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
+	// 	Future::uses(self, resource)
+	// }
 }
 
 pub trait SignalSemaphore: Future {

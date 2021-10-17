@@ -20,6 +20,7 @@ use super::{
 	Handle,
 	Stages,
 	Layout,
+	vertex_input,
 	VertexInput,
 	InputAssembly,
 	Tesselation,
@@ -50,7 +51,7 @@ impl From<vk::Result> for CreationError {
 	}
 }
 
-pub unsafe trait Graphics: resource::Reference<Handle=Handle> {
+pub trait Graphics: resource::Reference<Handle=Handle> {
 	type Layout: Layout;
 	type VertexInput: VertexInput;
 	
@@ -124,7 +125,7 @@ macro_rules! graphics_pipeline {
 			type Layout = $layout:ty;
 			type VertexInput = $vertex_input:ty;
 			type ViewportsScissors = $viewports_scissors:ty;
-			type ColorBlend = $color_blend:ty;
+			type BlendConstants = $blend_constants:ty;
 			type Rasterization = $rasterization:ty;
 			type DepthBounds = $depth_bounds:ty;
 			type StencilTest = $stencil_test:ty;
@@ -136,17 +137,17 @@ macro_rules! graphics_pipeline {
 			$layout,
 			$vertex_input,
 			$viewports_scissors,
-			$color_blend,
+			$blend_constants,
 			$rasterization,
 			$depth_bounds,
 			$stencil_test
 		>);
 
-		unsafe impl $crate::resource::AbstractReference for $id {
-			fn uid(&self) -> u64 {
-				self.0.handle().as_raw()
-			}
-		}
+		// unsafe impl $crate::resource::AbstractReference for $id {
+		// 	fn uid(&self) -> u64 {
+		// 		self.0.handle().as_raw()
+		// 	}
+		// }
 
 		unsafe impl $crate::resource::Reference for $id {
 			type Handle = $crate::pipeline::Handle;
@@ -156,11 +157,11 @@ macro_rules! graphics_pipeline {
 			}
 		}
 
-		unsafe impl $crate::Graphics for $id {
+		impl $crate::pipeline::Graphics for $id {
 			type Layout = $layout;
 			type VertexInput = $vertex_input;
 			type ViewportsScissors = $viewports_scissors;
-			type ColorBlend = $color_blend;
+			type BlendConstants = $blend_constants;
 			type Rasterization = $rasterization;
 			type DepthBounds = $depth_bounds;
 			type StencilTest = $stencil_test;
@@ -182,10 +183,10 @@ impl<
 	S: dynamic_state::StencilTest
 > Raw<L, I, V, R, B, D, S> {
 	/// Creates a new raw graphics pipeline.
-	pub fn new<M: Stages>(
+	pub fn new<M: Stages>( // TODO statically ensure that the given stages match the layout & vertex input.
 		device: &Arc<Device>,
 		stages: &M,
-		vertex_input: I,
+		input_assembly: InputAssembly,
 		tesselation: Option<Tesselation>,
 		viewports: <V::Viewports as dynamic_state::Viewports>::InitialType,
 		scissors: <V::Scissors as dynamic_state::Scissors>::InitialType,
@@ -253,10 +254,10 @@ impl<
 		};
 
 		let mut vertex_input_state = vk::PipelineVertexInputStateCreateInfo::default();
-		vertex_input_state.vertex_binding_description_count = vertex_input.bindings().len() as u32;
-		vertex_input_state.p_vertex_binding_descriptions = vertex_input.bindings().as_ptr() as *const _;
-		vertex_input_state.vertex_attribute_description_count = vertex_input.attributes().len() as u32;
-		vertex_input_state.p_vertex_attribute_descriptions = vertex_input.attributes().as_ptr() as *const _;
+		vertex_input_state.vertex_binding_description_count = <I::Bindings as vertex_input::Bindings>::LIST.len() as u32;
+		vertex_input_state.p_vertex_binding_descriptions = <I::Bindings  as vertex_input::Bindings>::LIST.as_ptr() as *const _;
+		vertex_input_state.vertex_attribute_description_count = I::ATTRIBUTES.len() as u32;
+		vertex_input_state.p_vertex_attribute_descriptions = I::ATTRIBUTES.as_ptr() as *const _;
 
 		let infos = vk::GraphicsPipelineCreateInfo {
 			// Shader stages
@@ -264,7 +265,7 @@ impl<
 			p_stages: vk_stages.as_ptr(),
 			//
 			p_vertex_input_state: &vertex_input_state,
-			p_input_assembly_state: &I::Assembly::vulkan(),
+			p_input_assembly_state: input_assembly.as_vulkan(),
 			p_tessellation_state: tesselation.as_ref().map(|t| t.as_vulkan() as *const _).unwrap_or(std::ptr::null()),
 			//
 			p_viewport_state: &viewport_state,

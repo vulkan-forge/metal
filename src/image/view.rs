@@ -11,6 +11,9 @@ use super::{
 	Image
 };
 
+/// Image view handle.
+pub type Handle = vk::ImageView;
+
 #[derive(Debug)]
 pub enum CreationError {
 	OutOfMemory(OomError)
@@ -174,7 +177,7 @@ impl SubresourceRange {
 	}
 }
 
-pub unsafe trait View: resource::Reference<Handle=vk::ImageView> {
+pub unsafe trait View: resource::Reference<Handle=Handle> {
 	// ...
 }
 
@@ -184,7 +187,7 @@ unsafe impl<V: std::ops::Deref> View for V where V::Target: View {
 
 pub struct Raw<I: Image> {
 	image: I,
-	handle: vk::ImageView
+	handle: Handle
 }
 
 impl<I: Image> Raw<I> {
@@ -215,24 +218,24 @@ impl<I: Image> Raw<I> {
 	}
 }
 
-unsafe impl<I: Image> resource::AbstractReference for Raw<I> {
-	fn uid(&self) -> u64 {
-		use ash::vk::Handle;
-		self.handle.as_raw()
-	}
-}
+// unsafe impl<I: Image> resource::AbstractReference for Raw<I> {
+// 	fn uid(&self) -> u64 {
+// 		use ash::vk::Handle;
+// 		self.handle.as_raw()
+// 	}
+// }
 
 unsafe impl<I: Image> resource::Reference for Raw<I> {
-	type Handle = vk::ImageView;
+	type Handle = Handle;
 
-	fn handle(&self) -> vk::ImageView {
+	fn handle(&self) -> Handle {
 		self.handle
 	}
 }
 
-unsafe impl<I: Image> View for Raw<I> {
-	//
-}
+// unsafe impl<I: Image> View for Raw<I> {
+// 	//
+// }
 
 impl<I: Image> Drop for Raw<I> {
 	fn drop(&mut self) {
@@ -242,16 +245,62 @@ impl<I: Image> Drop for Raw<I> {
 	}
 }
 
-pub struct LocalViews<'a> {
-	handles: Vec<vk::ImageView>,
-	resources: Vec<crate::resource::Ref<'a>>
+// pub struct LocalViews<'a> {
+// 	handles: Vec<Handle>,
+// 	resources: Vec<crate::resource::Ref<'a>>
+// }
+
+// impl<'a> LocalViews<'a> {
+// 	pub fn new() -> Self {
+// 		Self {
+// 			handles: Vec::new(),
+// 			resources: Vec::new()
+// 		}
+// 	}
+
+// 	pub fn is_empty(&self) -> bool {
+// 		self.handles.is_empty()
+// 	}
+
+// 	pub fn len(&self) -> usize {
+// 		self.handles.len()
+// 	}
+
+// 	pub fn push<V: 'a + View>(&mut self, view: V) {
+// 		self.handles.push(view.handle());
+// 		self.resources.push(view.into());
+// 	}
+
+// 	pub(crate) fn as_vulkan(&self) -> &[Handle] {
+// 		&self.handles
+// 	}
+// }
+
+// impl<'a> AsRef<[Handle]> for LocalViews<'a> {
+// 	fn as_ref(&self) -> &[Handle] {
+// 		self.as_vulkan()
+// 	}
+// }
+
+// impl<'a> IntoIterator for LocalViews<'a> {
+// 	type Item = crate::resource::Ref<'a>;
+// 	type IntoIter = std::vec::IntoIter<crate::resource::Ref<'a>>;
+
+// 	fn into_iter(self) -> Self::IntoIter {
+// 		self.resources.into_iter()
+// 	}
+// }
+
+pub struct Views<V> {
+	views: Vec<V>,
+	handles: Vec<Handle>
 }
 
-impl<'a> LocalViews<'a> {
-	pub fn new() -> Self {
+impl<V> Views<V> {
+	pub fn new(views: V) -> Self {
 		Self {
-			handles: Vec::new(),
-			resources: Vec::new()
+			views: Vec::new(),
+			handles: Vec::new()
 		}
 	}
 
@@ -263,119 +312,73 @@ impl<'a> LocalViews<'a> {
 		self.handles.len()
 	}
 
-	pub fn push<V: 'a + View>(&mut self, view: V) {
+	pub fn push(&mut self, view: V) where V: View {
 		self.handles.push(view.handle());
-		self.resources.push(view.into());
+		self.views.push(view.into());
 	}
 
-	pub(crate) fn as_vulkan(&self) -> &[vk::ImageView] {
+	pub(crate) fn as_vulkan(&self) -> &[Handle] {
 		&self.handles
 	}
 }
 
-impl<'a> AsRef<[vk::ImageView]> for LocalViews<'a> {
-	fn as_ref(&self) -> &[vk::ImageView] {
+impl<V> IntoIterator for Views<V> {
+	type Item = V;
+	type IntoIter = std::vec::IntoIter<V>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.views.into_iter()
+	}
+}
+
+impl<V> AsRef<[Handle]> for Views<V> {
+	fn as_ref(&self) -> &[Handle] {
 		self.as_vulkan()
 	}
 }
 
-impl<'a> IntoIterator for LocalViews<'a> {
-	type Item = crate::resource::Ref<'a>;
-	type IntoIter = std::vec::IntoIter<crate::resource::Ref<'a>>;
+// pub struct SyncViews<'a> {
+// 	handles: Vec<Handle>,
+// 	resources: Vec<crate::resource::SyncRef<'a>>
+// }
 
-	fn into_iter(self) -> Self::IntoIter {
-		self.resources.into_iter()
-	}
-}
+// impl<'a> SyncViews<'a> {
+// 	pub fn new() -> Self {
+// 		Self {
+// 			handles: Vec::new(),
+// 			resources: Vec::new()
+// 		}
+// 	}
 
-pub struct Views<'a> {
-	handles: Vec<vk::ImageView>,
-	resources: Vec<crate::resource::SendRef<'a>>
-}
+// 	pub fn is_empty(&self) -> bool {
+// 		self.handles.is_empty()
+// 	}
 
-impl<'a> Views<'a> {
-	pub fn new() -> Self {
-		Self {
-			handles: Vec::new(),
-			resources: Vec::new()
-		}
-	}
+// 	pub fn len(&self) -> usize {
+// 		self.handles.len()
+// 	}
 
-	pub fn is_empty(&self) -> bool {
-		self.handles.is_empty()
-	}
+// 	pub fn push<V: 'a + Send + Sync + View>(&mut self, view: V) {
+// 		self.handles.push(view.handle());
+// 		self.resources.push(view.into());
+// 	}
 
-	pub fn len(&self) -> usize {
-		self.handles.len()
-	}
+// 	pub(crate) fn as_vulkan(&self) -> &[Handle] {
+// 		&self.handles
+// 	}
+// }
 
-	pub fn push<V: 'a + Send + View>(&mut self, view: V) {
-		self.handles.push(view.handle());
-		self.resources.push(view.into());
-	}
+// impl<'a> IntoIterator for SyncViews<'a> {
+// 	type Item = crate::resource::SyncRef<'a>;
+// 	type IntoIter = std::vec::IntoIter<crate::resource::SyncRef<'a>>;
 
-	pub(crate) fn as_vulkan(&self) -> &[vk::ImageView] {
-		&self.handles
-	}
-}
+// 	fn into_iter(self) -> Self::IntoIter {
+// 		self.resources.into_iter()
+// 	}
+// }
 
-impl<'a> IntoIterator for Views<'a> {
-	type Item = crate::resource::SendRef<'a>;
-	type IntoIter = std::vec::IntoIter<crate::resource::SendRef<'a>>;
-
-	fn into_iter(self) -> Self::IntoIter {
-		self.resources.into_iter()
-	}
-}
-
-impl<'a> AsRef<[vk::ImageView]> for Views<'a> {
-	fn as_ref(&self) -> &[vk::ImageView] {
-		self.as_vulkan()
-	}
-}
-
-pub struct SyncViews<'a> {
-	handles: Vec<vk::ImageView>,
-	resources: Vec<crate::resource::SyncRef<'a>>
-}
-
-impl<'a> SyncViews<'a> {
-	pub fn new() -> Self {
-		Self {
-			handles: Vec::new(),
-			resources: Vec::new()
-		}
-	}
-
-	pub fn is_empty(&self) -> bool {
-		self.handles.is_empty()
-	}
-
-	pub fn len(&self) -> usize {
-		self.handles.len()
-	}
-
-	pub fn push<V: 'a + Send + Sync + View>(&mut self, view: V) {
-		self.handles.push(view.handle());
-		self.resources.push(view.into());
-	}
-
-	pub(crate) fn as_vulkan(&self) -> &[vk::ImageView] {
-		&self.handles
-	}
-}
-
-impl<'a> IntoIterator for SyncViews<'a> {
-	type Item = crate::resource::SyncRef<'a>;
-	type IntoIter = std::vec::IntoIter<crate::resource::SyncRef<'a>>;
-
-	fn into_iter(self) -> Self::IntoIter {
-		self.resources.into_iter()
-	}
-}
-
-impl<'a> AsRef<[vk::ImageView]> for SyncViews<'a> {
-	fn as_ref(&self) -> &[vk::ImageView] {
-		self.as_vulkan()
-	}
-}
+// impl<'a> AsRef<[Handle]> for SyncViews<'a> {
+// 	fn as_ref(&self) -> &[Handle] {
+// 		self.as_vulkan()
+// 	}
+// }

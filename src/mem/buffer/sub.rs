@@ -4,9 +4,9 @@ use std::ops::{
 };
 pub use super::Reference;
 
-pub mod index;
+// pub mod index;
 
-pub use index::*;
+// pub use index::*;
 
 /// Sub buffer reader.
 pub unsafe trait Read: Reference {

@@ -50,11 +50,11 @@ impl<T, S> Typed<T, S> {
 	}
 }
 
-unsafe impl<T, S> resource::AbstractReference for Typed<T, S> {
-	fn uid(&self) -> u64 {
-		self.inner.handle().as_raw()
-	}
-}
+// unsafe impl<T, S> resource::AbstractReference for Typed<T, S> {
+// 	fn uid(&self) -> u64 {
+// 		self.inner.handle().as_raw()
+// 	}
+// }
 
 unsafe impl<T, S> resource::Reference for Typed<T, S> {
 	type Handle = vk::Buffer;

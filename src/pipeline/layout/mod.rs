@@ -112,12 +112,12 @@ impl<C: PushConstants, S: descriptor::set::Layouts> Raw<C, S> {
 	}
 }
 
-unsafe impl<P: PushConstants, S: descriptor::set::Layouts> resource::AbstractReference for Raw<P, S> {
-	fn uid(&self) -> u64 {
-		use ash::vk::Handle;
-		self.handle.as_raw()
-	}
-}
+// unsafe impl<P: PushConstants, S: descriptor::set::Layouts> resource::AbstractReference for Raw<P, S> {
+// 	fn uid(&self) -> u64 {
+// 		use ash::vk::Handle;
+// 		self.handle.as_raw()
+// 	}
+// }
 
 unsafe impl<P: PushConstants, S: descriptor::set::Layouts> resource::Reference for Raw<P, S> {
 	type Handle = Handle;
@@ -170,11 +170,11 @@ macro_rules! pipeline_layout {
 			$descriptor_sets
 		>);
 
-		unsafe impl $crate::resource::AbstractReference for $id {
-			fn uid(&self) -> u64 {
-				self.0.handle().as_raw()
-			}
-		}
+		// unsafe impl $crate::resource::AbstractReference for $id {
+		// 	fn uid(&self) -> u64 {
+		// 		self.0.handle().as_raw()
+		// 	}
+		// }
 
 		unsafe impl $crate::resource::Reference for $id {
 			type Handle = $crate::pipeline::layout::Handle;
@@ -184,7 +184,7 @@ macro_rules! pipeline_layout {
 			}
 		}
 
-		unsafe impl $crate::Layout for $id {
+		unsafe impl $crate::pipeline::Layout for $id {
 			type PushConstants = $push_constants;
 			type DescriptorSets = $descriptor_sets;
 		}

@@ -15,7 +15,7 @@ use crate::{
 	mem::Slot
 };
 use super::{
-	RawHandle,
+	Handle,
 	Typed,
 	sub
 };
@@ -188,7 +188,7 @@ pub struct Read<R: Reference> {
 	index: u32,
 
 	/// Raw buffer handle.
-	handle: RawHandle,
+	handle: Handle,
 
 	/// Offset in the array.
 	offset: u64,
@@ -203,17 +203,17 @@ impl<R: Reference> Read<R> {
 	}
 }
 
-unsafe impl<R: Reference> resource::AbstractReference for Read<R> {
-	fn uid(&self) -> u64 {
-		use ash::vk::Handle;
-		self.handle.as_raw()
-	}
-}
+// unsafe impl<R: Reference> resource::AbstractReference for Read<R> {
+// 	fn uid(&self) -> u64 {
+// 		use ash::vk::Handle;
+// 		self.handle.as_raw()
+// 	}
+// }
 
 unsafe impl<R: Reference> resource::Reference for Read<R> {
-	type Handle = RawHandle;
+	type Handle = Handle;
 
-	fn handle(&self) -> RawHandle {
+	fn handle(&self) -> Handle {
 		self.handle
 	}
 }
@@ -243,7 +243,7 @@ pub struct Write<R: Reference> {
 	index: u32,
 
 	/// Raw buffer handle.
-	handle: RawHandle,
+	handle: Handle,
 
 	/// Offset in the array.
 	offset: u64,
@@ -262,17 +262,17 @@ impl<R: Reference> Write<R> {
 	}
 }
 
-unsafe impl<R: Reference> resource::AbstractReference for Write<R> {
-	fn uid(&self) -> u64 {
-		use ash::vk::Handle;
-		self.handle.as_raw()
-	}
-}
+// unsafe impl<R: Reference> resource::AbstractReference for Write<R> {
+// 	fn uid(&self) -> u64 {
+// 		use ash::vk::Handle;
+// 		self.handle.as_raw()
+// 	}
+// }
 
 unsafe impl<R: Reference> resource::Reference for Write<R> {
-	type Handle = RawHandle;
+	type Handle = Handle;
 
-	fn handle(&self) -> RawHandle {
+	fn handle(&self) -> Handle {
 		self.handle
 	}
 }

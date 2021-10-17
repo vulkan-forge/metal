@@ -54,11 +54,11 @@ impl<S: Slot> Bound<S> {
 	}
 }
 
-unsafe impl<S: Slot> resource::AbstractReference for Bound<S> {
-	fn uid(&self) -> u64 {
-		self.inner.handle().as_raw()
-	}
-}
+// unsafe impl<S: Slot> resource::AbstractReference for Bound<S> {
+// 	fn uid(&self) -> u64 {
+// 		self.inner.handle().as_raw()
+// 	}
+// }
 
 unsafe impl<S: Slot> resource::Reference for Bound<S> {
 	type Handle = vk::Buffer;

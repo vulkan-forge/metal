@@ -19,9 +19,9 @@ pub use unbound::*;
 pub use bound::*;
 pub use view::{
 	View,
-	LocalViews,
+	// LocalViews,
 	Views,
-	SyncViews
+	// SyncViews
 };
 
 pub use crate::framebuffer::SampleCount;

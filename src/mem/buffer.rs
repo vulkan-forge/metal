@@ -1,6 +1,3 @@
-use std::{
-	vec::Vec as StdVec,
-};
 use ash::vk;
 use crate::resource;
 
@@ -10,7 +7,7 @@ pub mod sub;
 mod unbound;
 mod bound;
 mod typed;
-mod index;
+// mod index;
 pub mod vec;
 pub mod array;
 
@@ -19,90 +16,91 @@ pub use usage::*;
 pub use unbound::*;
 pub use bound::*;
 pub use typed::*;
-pub use index::*;
+// pub use index::*;
 pub use vec::Vec;
 pub use array::Array;
 
-pub type RawHandle = vk::Buffer;
+/// Raw buffer handle.
+pub type Handle = vk::Buffer;
 
-pub trait Reference = resource::Reference<Handle=RawHandle>;
+pub trait Reference = resource::Reference<Handle=Handle>;
 
-pub struct LocalBuffers<'a> {
-	handles: StdVec<vk::Buffer>,
-	resources: StdVec<resource::Ref<'a>>
-}
+// pub struct LocalBuffers<'a> {
+// 	handles: StdVec<vk::Buffer>,
+// 	resources: StdVec<resource::Ref<'a>>
+// }
 
-impl<'a> LocalBuffers<'a> {
-	pub fn new() -> Self {
-		Self {
-			handles: StdVec::new(),
-			resources: StdVec::new()
-		}
-	}
+// impl<'a> LocalBuffers<'a> {
+// 	pub fn new() -> Self {
+// 		Self {
+// 			handles: StdVec::new(),
+// 			resources: StdVec::new()
+// 		}
+// 	}
 
-	pub fn is_empty(&self) -> bool {
-		self.handles.is_empty()
-	}
+// 	pub fn is_empty(&self) -> bool {
+// 		self.handles.is_empty()
+// 	}
 
-	pub fn len(&self) -> usize {
-		self.handles.len()
-	}
+// 	pub fn len(&self) -> usize {
+// 		self.handles.len()
+// 	}
 
-	pub fn push<B: 'a + Reference>(&mut self, buffer: B) {
-		self.handles.push(buffer.handle());
-		self.resources.push(buffer.into());
-	}
+// 	pub fn push<B: 'a + Reference>(&mut self, buffer: B) {
+// 		self.handles.push(buffer.handle());
+// 		self.resources.push(buffer.into());
+// 	}
 
-	pub(crate) fn as_vulkan(&self) -> &[vk::Buffer] {
-		&self.handles
-	}
-}
+// 	pub(crate) fn as_vulkan(&self) -> &[vk::Buffer] {
+// 		&self.handles
+// 	}
+// }
 
-impl<'a> IntoIterator for LocalBuffers<'a> {
-	type Item = resource::Ref<'a>;
-	type IntoIter = std::vec::IntoIter<resource::Ref<'a>>;
+// impl<'a> IntoIterator for LocalBuffers<'a> {
+// 	type Item = resource::Ref<'a>;
+// 	type IntoIter = std::vec::IntoIter<resource::Ref<'a>>;
 
-	fn into_iter(self) -> Self::IntoIter {
-		self.resources.into_iter()
-	}
-}
+// 	fn into_iter(self) -> Self::IntoIter {
+// 		self.resources.into_iter()
+// 	}
+// }
 
-pub struct Buffers<'a> {
-	handles: StdVec<vk::Buffer>,
-	resources: StdVec<resource::SendRef<'a>>
-}
+// pub struct Buffers<'a> {
+// 	handles: StdVec<vk::Buffer>,
+// 	resources: StdVec<resource::SendRef<'a>>
+// }
 
-impl<'a> Buffers<'a> {
-	pub fn new() -> Self {
-		Self {
-			handles: StdVec::new(),
-			resources: StdVec::new()
-		}
-	}
+// impl<'a> Buffers<'a> {
+// 	pub fn new() -> Self {
+// 		Self {
+// 			handles: StdVec::new(),
+// 			resources: StdVec::new()
+// 		}
+// 	}
 
-	pub fn is_empty(&self) -> bool {
-		self.handles.is_empty()
-	}
+// 	pub fn is_empty(&self) -> bool {
+// 		self.handles.is_empty()
+// 	}
 
-	pub fn len(&self) -> usize {
-		self.handles.len()
-	}
+// 	pub fn len(&self) -> usize {
+// 		self.handles.len()
+// 	}
 
-	pub fn push<B: 'a + Send + Reference>(&mut self, buffer: B) {
-		self.handles.push(buffer.handle());
-		self.resources.push(buffer.into());
-	}
+// 	pub fn push<B: 'a + Send + Reference>(&mut self, buffer: B) {
+// 		self.handles.push(buffer.handle());
+// 		self.resources.push(buffer.into());
+// 	}
 
-	pub(crate) fn as_vulkan(&self) -> &[vk::Buffer] {
-		&self.handles
-	}
-}
+// 	pub(crate) fn as_vulkan(&self) -> &[vk::Buffer] {
+// 		&self.handles
+// 	}
+// }
 
-impl<'a> IntoIterator for Buffers<'a> {
-	type Item = resource::SendRef<'a>;
-	type IntoIter = std::vec::IntoIter<resource::SendRef<'a>>;
+// impl<'a> IntoIterator for Buffers<'a> {
+// 	type Item = resource::SendRef<'a>;
+// 	type IntoIter = std::vec::IntoIter<resource::SendRef<'a>>;
 
-	fn into_iter(self) -> Self::IntoIter {
-		self.resources.into_iter()
-	}
-}
+// 	fn into_iter(self) -> Self::IntoIter {
+// 		self.resources.into_iter()
+// 	}
+// }

@@ -69,7 +69,7 @@ impl From<vk::Result> for CreationError {
 	}
 }
 
-pub struct Framebuffer<A: AsRef<[vk::ImageView]> = image::LocalViews<'static>> {
+pub struct Framebuffer<A: AsRef<[image::view::Handle]>> {
 	device: Arc<Device>,
 	render_pass: Arc<RenderPass>,
 	attachments: A,
@@ -117,12 +117,12 @@ impl<A: AsRef<[vk::ImageView]>> Framebuffer<A> {
 	}
 }
 
-unsafe impl<A: AsRef<[vk::ImageView]>> resource::AbstractReference for Framebuffer<A> {
-	fn uid(&self) -> u64 {
-		use ash::vk::Handle;
-		self.handle.as_raw()
-	}
-}
+// unsafe impl<A: AsRef<[vk::ImageView]>> resource::AbstractReference for Framebuffer<A> {
+// 	fn uid(&self) -> u64 {
+// 		use ash::vk::Handle;
+// 		self.handle.as_raw()
+// 	}
+// }
 
 unsafe impl<A: AsRef<[vk::ImageView]>> resource::Reference for Framebuffer<A> {
 	type Handle = vk::Framebuffer;

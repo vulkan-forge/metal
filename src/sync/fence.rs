@@ -10,8 +10,7 @@ use std::{
 use crate::{
 	OomError,
 	Device,
-	DeviceOwned,
-	resource
+	DeviceOwned
 };
 use super::{
 	task,
@@ -140,9 +139,9 @@ unsafe impl<P: task::Payload, F: Fence> future::Future for Future<P, F> {
 		Some(self.fence.handle())
 	}
 
-	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
-		self.payload.uses(resource)
-	}
+	// fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
+	// 	self.payload.uses(resource)
+	// }
 }
 
 impl<P: task::Payload, F: Fence> future::SignalFence for Future<P, F> {
@@ -177,9 +176,9 @@ unsafe impl<P: task::Payload, F: Fence, S: Semaphore> future::Future for FutureW
 		Some(self.fence.handle())
 	}
 
-	fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
-		self.payload.uses(resource)
-	}
+	// fn uses(&self, resource: &dyn resource::AbstractReference) -> bool {
+	// 	self.payload.uses(resource)
+	// }
 }
 
 impl<P: task::Payload, F: Fence, S: Semaphore> future::SignalSemaphore for FutureWithSemaphore<P, F, S> {}
