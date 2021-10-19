@@ -103,20 +103,20 @@ pub mod viewports {
 	}
 
 	pub unsafe trait DynamicState {
-		const COUNT: usize;
+		const COUNT: u32;
 
 		const IS_DYNAMIC: bool;
 
 		type InitialType: InitialType;
 	}
 
-	pub struct Static<const N: usize>;
+	pub struct Static<const N: u32>;
 
 	macro_rules! static_state {
 		($($n:literal),*) => {
 			$(
 				unsafe impl DynamicState for Static<$n> {
-					const COUNT: usize = $n;
+					const COUNT: u32 = $n;
 			
 					const IS_DYNAMIC: bool = false;
 			
@@ -127,7 +127,7 @@ pub mod viewports {
 	}
 
 	unsafe impl DynamicState for Static<1> {
-		const COUNT: usize = 1;
+		const COUNT: u32 = 1;
 
 		const IS_DYNAMIC: bool = false;
 
@@ -138,10 +138,10 @@ pub mod viewports {
 	// See: http://vulkan.gpuinfo.org/displaydevicelimit.php?name=maxViewports&platform=all
 	static_state!(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16);
 
-	pub struct Dynamic<const N: usize>;
+	pub struct Dynamic<const N: u32>;
 
-	unsafe impl<const N: usize> DynamicState for Dynamic<N> {
-		const COUNT: usize = N;
+	unsafe impl<const N: u32> DynamicState for Dynamic<N> {
+		const COUNT: u32 = N;
 
 		const IS_DYNAMIC: bool = true;
 
@@ -175,20 +175,20 @@ pub mod scissors {
 	}
 
 	pub unsafe trait DynamicState {
-		const COUNT: usize;
+		const COUNT: u32;
 
 		const IS_DYNAMIC: bool;
 
 		type InitialType: InitialType;
 	}
 
-	pub struct Static<const N: usize>;
+	pub struct Static<const N: u32>;
 
 	macro_rules! static_state {
 		($($n:literal),*) => {
 			$(
 				unsafe impl DynamicState for Static<$n> {
-					const COUNT: usize = $n;
+					const COUNT: u32 = $n;
 			
 					const IS_DYNAMIC: bool = false;
 			
@@ -199,7 +199,7 @@ pub mod scissors {
 	}
 
 	unsafe impl DynamicState for Static<1> {
-		const COUNT: usize = 1;
+		const COUNT: u32 = 1;
 
 		const IS_DYNAMIC: bool = false;
 
@@ -210,10 +210,10 @@ pub mod scissors {
 	// See: http://vulkan.gpuinfo.org/displaydevicelimit.php?name=maxViewports&platform=all
 	static_state!(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16);
 
-	pub struct Dynamic<const N: usize>;
+	pub struct Dynamic<const N: u32>;
 
-	unsafe impl<const N: usize> DynamicState for Dynamic<N> {
-		const COUNT: usize = N;
+	unsafe impl<const N: u32> DynamicState for Dynamic<N> {
+		const COUNT: u32 = N;
 
 		const IS_DYNAMIC: bool = true;
 
@@ -222,10 +222,10 @@ pub mod scissors {
 
 	pub unsafe trait CompatibleWith<V> {}
 
-	unsafe impl<const N: usize> CompatibleWith<super::viewports::Static<N>> for Static<N> {}
-	unsafe impl<const N: usize> CompatibleWith<super::viewports::Static<N>> for Dynamic<N> {}
-	unsafe impl<const N: usize> CompatibleWith<super::viewports::Dynamic<N>> for Static<N> {}
-	unsafe impl<const N: usize> CompatibleWith<super::viewports::Dynamic<N>> for Dynamic<N> {}
+	unsafe impl<const N: u32> CompatibleWith<super::viewports::Static<N>> for Static<N> {}
+	unsafe impl<const N: u32> CompatibleWith<super::viewports::Static<N>> for Dynamic<N> {}
+	unsafe impl<const N: u32> CompatibleWith<super::viewports::Dynamic<N>> for Static<N> {}
+	unsafe impl<const N: u32> CompatibleWith<super::viewports::Dynamic<N>> for Dynamic<N> {}
 }
 
 pub mod line_width {
@@ -389,9 +389,9 @@ impl StencilTest for StaticStencilTest {
 	type StencilReference = stencil_reference::Static;
 }
 
-pub struct StaticViewportsScissors<const N: usize>;
+pub struct StaticViewportsScissors<const N: u32>;
 
-impl<const N: usize> ViewportsScissors for StaticViewportsScissors<N>
+impl<const N: u32> ViewportsScissors for StaticViewportsScissors<N>
 where
 	viewports::Static<N>: viewports::DynamicState,
 	scissors::Static<N>: scissors::DynamicState {
@@ -399,9 +399,9 @@ where
 	type Scissors = scissors::Static<N>;
 }
 
-pub struct DynamicViewportsScissors<const N: usize>;
+pub struct DynamicViewportsScissors<const N: u32>;
 
-impl<const N: usize> ViewportsScissors for DynamicViewportsScissors<N> {
+impl<const N: u32> ViewportsScissors for DynamicViewportsScissors<N> {
 	type Viewports = viewports::Dynamic<N>;
 	type Scissors = scissors::Dynamic<N>;
 }

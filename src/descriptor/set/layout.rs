@@ -87,7 +87,7 @@ macro_rules! descriptor_set_layout {
 								$loc,
 								$crate::descriptor::Type::$ty,
 								$crate::descriptor_set_layout!(@count $([$count])*),
-								$crate::core::iter::IntoIterator::into_iter([
+								$crate::std::iter::IntoIterator::into_iter([
 									$(
 										$crate::pipeline::shader::Stage::$stage
 									),*
@@ -117,7 +117,7 @@ pub struct Raw {
 }
 
 impl Raw {
-	/// Create a new layout instance for the given device.
+	/// Create a new descriptor set layout instance for the given device.
 	pub fn new(device: &Arc<Device>, bindings: &[Binding]) -> Result<Self, OomError> {
 		let infos = vk::DescriptorSetLayoutCreateInfo {
 			binding_count: bindings.len() as u32,
@@ -215,8 +215,6 @@ macro_rules! descriptor_set_layouts {
 // pub unsafe trait CompatibleWith<L>: Layouts {
 // 	// ...
 // }
-
-// unsafe impl<L: Layouts> CompatibleWith<L> for L {}
 
 unsafe impl<L: Layout> Layouts for L {
 	type Handles<'a> = [Handle; 1];

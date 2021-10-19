@@ -9,6 +9,8 @@ use crate::{
 };
 use super::EntryPoint;
 
+pub mod descriptor;
+
 #[derive(Debug)]
 pub enum CreationError {
 	OomError(OomError),

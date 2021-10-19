@@ -122,14 +122,16 @@ macro_rules! graphics_pipeline {
 	{
 		$(#[$doc:meta])*
 		$vis:vis struct $id:ident {
-			type Layout = $layout:ty;
-			type VertexInput = $vertex_input:ty;
-			type ViewportsScissors = $viewports_scissors:ty;
-			type BlendConstants = $blend_constants:ty;
-			type Rasterization = $rasterization:ty;
-			type DepthBounds = $depth_bounds:ty;
-			type StencilTest = $stencil_test:ty;
-			type RenderPass = $render_pass:ty;
+			layout: $layout:ty,
+			vertex_input: $vertex_input:ty,
+			vertex_shader: $vertex_shader:ty,
+			viewports_scissors: $viewports_scissors:ty,
+			blend_constants: $blend_constants:ty,
+			rasterization: $rasterization:ty,
+			depth_bounds: $depth_bounds:ty,
+			stencil_test: $stencil_test:ty,
+			fragment_shader: $fragment_shader:ty,
+			render_pass: $render_pass:ty
 		}
 	} => {
 		$(#[$doc])*
@@ -168,6 +170,61 @@ macro_rules! graphics_pipeline {
 
 			fn layout(&self) -> &Self::Layout {
 				self.0.layout()
+			}
+		}
+
+		impl $id {
+			/// Creates a new instance of the pipeline.
+			pub fn new(
+				device: std::sync::Arc<$crate::Device>,
+				layout: $layout,
+				vertex_input: $vertex_input,
+				vertex_shader: $vertex_shader,
+				fragment_shader: $fragment_shader,
+				render_pass: $render_pass,
+			) -> Self {
+				// let stages = unsafe {
+				//     magma::pipeline::stage::Vertex::new(
+				//         vertex_shader,
+				//         magma::pipeline::stage::Fragment::new(fragment_shader),
+				//     )
+				// };
+				// Self(magma::pipeline::graphics::Raw::new(
+				//     device,
+				//     stages,
+				//     vertex_input,
+				//     None,
+				//     magma::pipeline::Viewport::new(0f32, 0f32, 640f32, 480f32, -1f32, 1f32),
+				//     magma::pipeline::Scissor::new(0i32, 0i32, 640u32, 480u32),
+				//     magma::pipeline::Rasterization::new(
+				//         true,
+				//         true,
+				//         magma::pipeline::rasterization::PolygonMode::Fill,
+				//         magma::pipeline::rasterization::CullMode::Back,
+				//         magma::pipeline::rasterization::FrontFace::Clockwise,
+				//         (),
+				//         0f32,
+				//     ),
+				//     magma::pipeline::Multisample::new(
+				//         unsafe { magma::framebuffer::SampleCount::new_unchecked(1u8) },
+				//         None,
+				//         false,
+				//         false,
+				//     ),
+				//     None,
+				//     None,
+				//     magma::pipeline::ColorBlend::new(
+				//         vec![magma::pipeline::color_blend::Attachment::new(
+				//             None,
+				//             magma::pipeline::color_blend::ColorComponents::rgba(),
+				//         )],
+				//         None,
+				//         (),
+				//     ),
+				//     layout,
+				//     render_pass.subpass(0u32),
+				// ))
+				panic!("TODO")
 			}
 		}
 	};

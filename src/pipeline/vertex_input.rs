@@ -171,14 +171,14 @@ macro_rules! vertex_input_type {
 	(@offsets [$field_id:ident : $field_ty:ty, $($other_ids:ident : $other_tys:ty,)*]) => {
 		impl ConstOffsets {
 			const $field_id: usize = {
-				let align = $crate::core::mem::align_of::<$field_ty>();
+				let align = $crate::std::mem::align_of::<$field_ty>();
 				let trail = END_OF_PREV_FIELD % align;
 				END_OF_PREV_FIELD + (align - trail) * [1, 0][(trail == 0) as usize]
 			};
 		}
 
 		const _: () = {
-			const END_OF_PREV_FIELD: usize = ConstOffsets::$field_id + $crate::core::mem::size_of::<$field_ty>();
+			const END_OF_PREV_FIELD: usize = ConstOffsets::$field_id + $crate::std::mem::size_of::<$field_ty>();
 			$crate::vertex_input_type!(
 				@offsets [$($other_ids : $other_tys,)*]
 			);
@@ -272,7 +272,7 @@ macro_rules! vertex_input_bindings {
 				$(
 					$crate::pipeline::vertex_input::Binding::new(
 						$index,
-						$crate::core::mem::size_of::<$binding_ty>() as u32,
+						$crate::std::mem::size_of::<$binding_ty>() as u32,
 						$crate::vertex_input_bindings!( @rate $([$rate])* )
 					)
 				),*

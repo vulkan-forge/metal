@@ -1,8 +1,11 @@
 use ash::vk;
 
+pub mod ty;
 pub mod set;
 pub mod pool;
 // pub mod update;
+
+pub use ty::{Type, SizedType};
 
 pub use set::{
 	Set,
@@ -54,26 +57,3 @@ pub enum WriteInfo {
 // 	/// which may lead to undefined behavior.
 // 	unsafe fn set(&mut self, value: T);
 // }
-
-/// Descriptor type.
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[repr(i32)]
-pub enum Type {
-	Sampler = vk::DescriptorType::SAMPLER.as_raw(),
-	CombinedImageSampler  = vk::DescriptorType::COMBINED_IMAGE_SAMPLER.as_raw(),
-	SampledImage = vk::DescriptorType::SAMPLED_IMAGE.as_raw(),
-	StorageImage = vk::DescriptorType::STORAGE_IMAGE.as_raw(),
-	UniformTexelBuffer = vk::DescriptorType::UNIFORM_TEXEL_BUFFER.as_raw(),
-	StorageTexelBuffer = vk::DescriptorType::STORAGE_TEXEL_BUFFER.as_raw(),
-	UniformBuffer = vk::DescriptorType::UNIFORM_BUFFER.as_raw(),
-	StorageBuffer = vk::DescriptorType::STORAGE_BUFFER.as_raw(),
-	UniformBufferDynamic = vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC.as_raw(),
-	StorageBufferDynamic = vk::DescriptorType::STORAGE_BUFFER_DYNAMIC.as_raw(),
-	InputAttachment = vk::DescriptorType::INPUT_ATTACHMENT.as_raw()
-}
-
-impl Type {
-	pub const fn into_vulkan(self) -> vk::DescriptorType {
-		vk::DescriptorType::from_raw(self as i32)
-	}
-}

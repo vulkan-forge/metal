@@ -1,4 +1,4 @@
-mod module;
+pub mod module;
 mod stage;
 mod entry_point;
 

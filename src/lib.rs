@@ -18,10 +18,17 @@
 //! Descriptor set transitions are unsafe.
 #![feature(generic_associated_types)]
 #![feature(trait_alias)]
+#![feature(specialization)]
 #![feature(generic_const_exprs)]
 
 #[doc(hidden)]
-pub use ::core;
+pub use std;
+
+#[doc(hidden)]
+pub use static_assertions;
+
+#[doc(hidden)]
+pub use const_format;
 
 use std::{
 	error::Error,
