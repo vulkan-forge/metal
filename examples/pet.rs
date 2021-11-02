@@ -38,17 +38,30 @@ magma::vertex_input! {
     }
 }
 
+/// Matrix type.
 pub struct Matrix4x4([f32; 16]);
 
-magma::untyped_shader_module_descriptor_set! {
-    pub struct Uniform0 {
-        0 => [UniformBuffer; 1]
+// magma::untyped_shader_module_descriptor_set! {
+//     pub struct Uniform0 {
+//         0 => [UniformBuffer; 1]
+//     }
+// }
+
+magma::shader_module_descriptor_set! {
+    pub struct VertexShaderTransformationSet {
+        1 => magma::descriptor::ty::UniformBuffer<Matrix4x4>
     }
 }
 
-magma::shader_module_descriptor_set! {
-    pub struct VertexShaderTransformationSet : Uniform0 {
-        1 => magma::descriptor::ty::UniformBuffer<Matrix4x4>
+magma::shader_module_layout! {
+    pub struct SpriteVertexShaderLayout {
+        0 => VertexShaderTransformationSet
+    }
+}
+
+magma::shader_stages! {
+    pub struct SpriteShader : SpriteLayout {
+        SpriteVertexShaderLayout
     }
 }
 

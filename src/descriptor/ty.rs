@@ -42,6 +42,15 @@ impl<T, const N: usize> Array for [T; N] {
 	const COUNT: u32 = {N as u32};
 }
 
+/// Array type of length `L`.
+/// 
+/// This type is unsafe because it must be
+/// implemented at most once,
+/// `L` must be equal to `Array::LEN`.
+pub unsafe trait ArrayLen<const L: u32>: Array {}
+
+unsafe impl<T: Array> ArrayLen<{T::COUNT}> for T {}
+
 pub struct UniformBuffer<T>(PhantomData<T>);
 
 impl<T: Array> SizedType for UniformBuffer<T> {

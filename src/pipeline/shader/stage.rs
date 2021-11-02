@@ -52,6 +52,24 @@ macro_rules! stages {
 			}
 
 			#[inline]
+			pub const fn from_array<const N: usize>(array: [Stage; N]) -> Self {
+				let mut stages = Self::none();
+				let mut i = 0;
+
+				while i < N {
+					match array[i] {
+						$(
+							Stage::$variant => stages.$elem = true
+						),+
+					}
+
+					i += 1;
+				}
+
+				stages
+			}
+
+			#[inline]
 			pub fn insert(&mut self, stage: Stage) {
 				match stage {
 					$(
