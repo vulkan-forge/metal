@@ -145,12 +145,6 @@ macro_rules! graphics_pipeline {
 			$stencil_test
 		>);
 
-		// unsafe impl $crate::resource::AbstractReference for $id {
-		// 	fn uid(&self) -> u64 {
-		// 		self.0.handle().as_raw()
-		// 	}
-		// }
-
 		unsafe impl $crate::resource::Reference for $id {
 			type Handle = $crate::pipeline::Handle;
 

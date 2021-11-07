@@ -89,7 +89,7 @@ mod vertex_input {
     }
 
     magma::vertex_input! {
-        pub struct SpriteInput for bindings::Sprite {
+        pub struct Sprite for bindings::Sprite {
             0 => 0
         }
     }
@@ -131,36 +131,42 @@ mod shader {
 }
 
 mod pipeline {
-    // magma::graphics_pipeline! {
-    //     pub struct Sprite {
-    //         type Layout = std :: sync :: Arc < SpriteLayout > ;
-    //         type VertexInput = std :: sync :: Arc < SpriteInput > ;
-    //         type ViewportsScissors = StaticViewportAndScissor ;
-    //         type BlendConstants = magma :: pipeline :: dynamic_state :: blend_constants :: Dynamic ;
-    //         type Rasterization = StaticLineWidthAndDepthBias ;
-    //         type DepthBounds = magma :: pipeline :: dynamic_state :: depth_bounds :: Static ;
-    //         type StencilTest = StaticStencilTest ;
-    //         type RenderPass = std :: sync :: Arc < RenderPass > ;
-    //     }
-    // }
+    mod dynamic_state {
+        pub struct StaticViewportAndScissor;
+        impl magma::pipeline::dynamic_state::ViewportsScissors for StaticViewportAndScissor {
+            type Viewports = magma::pipeline::dynamic_state::viewports::Static<1u32>;
+            type Scissors = magma::pipeline::dynamic_state::scissors::Static<1u32>;
+        }
+        pub struct StaticLineWidthAndDepthBias;
+        impl magma::pipeline::dynamic_state::Rasterization for StaticLineWidthAndDepthBias {
+            type LineWidth = magma::pipeline::dynamic_state::line_width::Static;
+            type DepthBias = magma::pipeline::dynamic_state::depth_bias::Static;
+        }
+        pub struct StaticStencilTest;
+        impl magma::pipeline::dynamic_state::StencilTest for StaticStencilTest {
+            type StencilCompareMask = magma::pipeline::dynamic_state::stencil_compare_mask::Static;
+            type StencilWriteMask = magma::pipeline::dynamic_state::stencil_write_mask::Static;
+            type StencilReference = magma::pipeline::dynamic_state::stencil_reference::Static;
+        }
+    }
+
+    magma::graphics_pipeline! {
+        pub struct Sprite {
+            layout: std :: sync :: Arc < crate::layout::Sprite >,
+            vertex_input: crate::vertex_input::Sprite,
+            vertex_shader: crate::shader::SpriteVertex,
+            viewports_scissors: dynamic_state::StaticViewportAndScissor,
+            blend_constants: magma :: pipeline :: dynamic_state :: blend_constants :: Dynamic,
+            rasterization: dynamic_state::StaticLineWidthAndDepthBias,
+            depth_bounds: magma :: pipeline :: dynamic_state :: depth_bounds :: Static,
+            stencil_test: dynamic_state::StaticStencilTest,
+            fragment_shader: crate::shader::SpriteVertex,
+            render_pass: std :: sync :: Arc < crate::RenderPass >
+        }
+    }
 }
 
-// pub struct StaticViewportAndScissor;
-// impl magma::pipeline::dynamic_state::ViewportsScissors for StaticViewportAndScissor {
-//     type Viewports = magma::pipeline::dynamic_state::viewports::Static<1u32>;
-//     type Scissors = magma::pipeline::dynamic_state::scissors::Static<1u32>;
-// }
-// pub struct StaticLineWidthAndDepthBias;
-// impl magma::pipeline::dynamic_state::Rasterization for StaticLineWidthAndDepthBias {
-//     type LineWidth = magma::pipeline::dynamic_state::line_width::Static;
-//     type DepthBias = magma::pipeline::dynamic_state::depth_bias::Static;
-// }
-// pub struct StaticStencilTest;
-// impl magma::pipeline::dynamic_state::StencilTest for StaticStencilTest {
-//     type StencilCompareMask = magma::pipeline::dynamic_state::stencil_compare_mask::Static;
-//     type StencilWriteMask = magma::pipeline::dynamic_state::stencil_write_mask::Static;
-//     type StencilReference = magma::pipeline::dynamic_state::stencil_reference::Static;
-// }
+pub struct RenderPass;
 
 fn main() {
     println!("Hello World!")
