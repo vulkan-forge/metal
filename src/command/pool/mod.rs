@@ -51,7 +51,7 @@ impl From<vk::Result> for AllocError {
 }
 
 pub trait Pool: DeviceOwned {
-	type Buffer<'a>;
+	type Buffer<'a> where Self: 'a;
 
 	fn allocate<'a>(&'a self, count: u32) -> Result<Vec<Self::Buffer<'a>>, AllocError>;
 }

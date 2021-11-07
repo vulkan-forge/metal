@@ -220,8 +220,8 @@ pub unsafe trait InitAllFrom<'r, T>: Sets<'r> {
 /// This trait is used to call [`vkCmdBindDescriptorSets`](https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/vkCmdBindDescriptorSets.html)
 /// with the appropriate parameters.
 pub unsafe trait Transition<'r, A, B> {
-	type Handles<'a>: AsRef<[Handle]>;
-	type Offsets<'a>: AsRef<[u32]>;
+	type Handles<'a>: AsRef<[Handle]> where Self: 'a;
+	type Offsets<'a>: AsRef<[u32]> where Self: 'a;
 
 	fn first_set(&self) -> u32;
 

@@ -29,7 +29,7 @@ use super::{
 /// it has been allocated from.
 pub unsafe trait Pool: Sized {
 	/// Pool reference.
-	type Reference<'a>: Reference;
+	type Reference<'a>: Reference where Self: 'a;
 
 	/// Get a reference to this descriptor pool.
 	fn reference<'a>(&'a self) -> Self::Reference<'a>;

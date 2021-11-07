@@ -99,7 +99,7 @@ impl<P: DeviceOwned + std::ops::Deref<Target=Raw>> Handle for P {
 }
 
 impl<P: DeviceOwned + std::ops::Deref<Target=Raw>> Pool for P {
-	type Buffer<'a> = Buffer<&'a Raw>;
+	type Buffer<'a> where Self: 'a = Buffer<&'a Raw>;
 
 	fn allocate(&self, count: u32) -> Result<Vec<Buffer<&Raw>>, AllocError> {
 		self.deref().allocate(count)

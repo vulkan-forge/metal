@@ -79,14 +79,14 @@ impl<'a, B: Buffer> Recorder<'a, B> {
 /// Record a render pass.
 /// 
 /// The render pass ends when the `RenderPassRecorder` is dropped.
-pub struct RenderPass<'r, 'a, B: Buffer, L: pipeline::Layout> {
+pub struct RenderPass<'r, 'a, B: Buffer, L: pipeline::UntypedLayout> {
 	recorder: &'r mut Recorder<'a, B>,
 
 	/// Current layout
 	layout: PhantomData<L>
 }
 
-impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
+impl<'r, 'a, B: Buffer, L: pipeline::UntypedLayout> RenderPass<'r, 'a, B, L> {
 	fn into_raw_parts(self) -> &'r mut Recorder<'a, B> {
 		let recorder = unsafe { std::ptr::read(&self.recorder) };
 		std::mem::forget(self);
@@ -94,14 +94,14 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 	}
 }
 
-impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
+impl<'r, 'a, B: Buffer, L: pipeline::UntypedLayout> RenderPass<'r, 'a, B, L> {
 	pub fn bind_descriptor_sets<M, T>(
 		self,
 		layout: &'a M,
 		transition: &'a T
 	) -> RenderPass<'r, 'a, B, M>
 	where
-		M: 'a + Send + pipeline::Layout,
+		M: 'a + Send + pipeline::UntypedLayout,
 		T: descriptor::set::Transition<'a, L::DescriptorSets, M::DescriptorSets>
 	{
 		let recorder = self.into_raw_parts();
@@ -248,7 +248,7 @@ impl<'r, 'a, B: Buffer, L: pipeline::Layout> RenderPass<'r, 'a, B, L> {
 	// }
 }
 
-impl<'r, 'a, B: Buffer, L: pipeline::Layout> Drop for RenderPass<'r, 'a, B, L> {
+impl<'r, 'a, B: Buffer, L: pipeline::UntypedLayout> Drop for RenderPass<'r, 'a, B, L> {
 	fn drop(&mut self) {
 		unsafe {
 			self.recorder.buffer.device().handle().cmd_end_render_pass(self.recorder.buffer.handle())

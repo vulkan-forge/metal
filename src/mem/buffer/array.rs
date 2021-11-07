@@ -85,7 +85,7 @@ pub trait Reference: Sized {
 	type Item;
 	type Slot: Slot;
 
-	type ReadGuard<'a>: Deref<Target=Array<Self::Item, Self::Slot>>;
+	type ReadGuard<'a>: Deref<Target=Array<Self::Item, Self::Slot>> where Self: 'a;
 
 	fn read<'a>(&'a self) -> Self::ReadGuard<'a>;
 
@@ -143,7 +143,7 @@ pub trait Reference: Sized {
 impl<'a, T, S: Slot> Reference for &'a Array<T, S> {
 	type Item = T;
 	type Slot = S;
-	type ReadGuard<'b> = &'a Array<T, S>;
+	type ReadGuard<'b> where Self: 'b = &'a Array<T, S>;
 
 	fn read<'b>(&'b self) -> Self::ReadGuard<'b> {
 		self

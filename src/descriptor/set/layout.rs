@@ -18,23 +18,18 @@ use super::super::{
 
 pub type Handle = vk::DescriptorSetLayout;
 
-/// Untyped shader module descriptor set layout
-/// well typed by the typed shader module descriptor set layout
-/// `T`.
+/// Well typed descriptor set layout, or list of layouts.
 /// 
-/// The `T` layout type is a well typed version of `Self` if
-/// - it matches `Self` (every binding defined in `T` is defined in `Self`)
-/// - every binding defined in `Self` is defined in `T` and its
+/// The `T` layout type is a well typed with regard to `U` if
+/// - it matches `U` (every binding defined in `T` is defined in `U`)
+/// - every binding defined in `U` is defined in `T` and its
 ///   definition matches the constraints defined in `Self`
 ///   (descriptor type, count and accessing shader stages).
-pub unsafe trait WellTypedBy<T> {}
+pub unsafe trait WellTyped<U> {}
 
-/// Typed shader module descriptor set layout
-/// that matches the untyped shader module descriptor set layout
-/// `T`.
-/// This means that all the bindings in `Self` are defined
-/// in `T` with the same item count.
-pub unsafe trait Matches<T> {}
+/// Untyped descriptor set layout that is a subset of
+/// the typed descriptor set layout `T`.
+pub unsafe trait Subset<T> {}
 
 #[repr(transparent)]
 pub struct Binding(vk::DescriptorSetLayoutBinding);
@@ -71,8 +66,8 @@ pub trait Layout: resource::Reference<Handle=Handle> {}
 /// 
 /// descriptor_set_layout! {
 ///   pub struct MyDescriptorSetLayout {
-///     0 => UniformBuffer (Vertex),
-///     1 => Sampler => (Fragment)
+///     0 (Vertex) => UniformBuffer,
+///     1 (Fragment) => Sampler
 ///   }
 /// }
 /// ```
@@ -80,7 +75,7 @@ pub trait Layout: resource::Reference<Handle=Handle> {}
 macro_rules! untyped_descriptor_set_layout {
 	{
 		$vis:vis struct $id:ident {
-			$($loc:literal => $ty:tt ($($stage:ident),*)),*
+			$($loc:literal ($stages:ty) => $ty:tt),*
 		}
 	} => {
 		$vis struct $id($crate::descriptor::set::layout::Raw);
@@ -99,35 +94,14 @@ macro_rules! untyped_descriptor_set_layout {
 			unsafe impl $crate::descriptor::set::layout::BindUntypedLocation<$loc> for $id {
 				const TYPE: $crate::descriptor::Type = $crate::untyped_descriptor_set_layout!(@ty $ty);
 				const COUNT: u32 = $crate::untyped_descriptor_set_layout!(@count $ty);
-				const STAGES: $crate::pipeline::shader::Stages = $crate::pipeline::shader::Stages::from_array([
-					$(
-						$crate::pipeline::shader::Stage::$stage
-					),*
-				]);
+				type Stages = $stages;
 			}
 		)*
 
-		/// The `T` layout type is a well typed version of `Self` if
-		/// - it matches `Self` (every binding defined in `T` is defined in `Self`)
-		/// - every binding defined in `Self` is defined in `T` and its
-		///   definition matches the constraints defined in `Self`
-		///   (descriptor type, count and accessing shader stages).
-		unsafe impl<T> $crate::descriptor::set::layout::WellTypedBy<T> for $id where
-			T: $crate::descriptor::set::layout::Matches<Self>,
+		unsafe impl<T> $crate::descriptor::set::layout::Subset<T> for $id
+		where
 			$(
-				T: $crate::descriptor::set::layout::BindLocation<$loc>,
-				<T as $crate::descriptor::set::layout::BindLocation<$loc>>::Type:
-					$crate::descriptor::ty::WellTyped<
-						{ $crate::untyped_descriptor_set_layout!(@ty $ty) },
-						{ $crate::untyped_descriptor_set_layout!(@count $ty) },
-						{
-							$crate::pipeline::shader::Stages::from_array([
-								$(
-									$crate::pipeline::shader::Stage::$stage
-								),*
-							])
-						}
-					>
+				T: $crate::descriptor::set::layout::BindLocation<$loc>
 			),*
 		{}
 
@@ -141,11 +115,7 @@ macro_rules! untyped_descriptor_set_layout {
 								$loc,
 								$crate::untyped_descriptor_set_layout!(@ty $ty),
 								$crate::untyped_descriptor_set_layout!(@count $ty),
-								$crate::pipeline::shader::Stages::from_array([
-									$(
-										$crate::pipeline::shader::Stage::$stage
-									),*
-								])
+								<$stages as $crate::pipeline::shader::StageSet>::STAGES
 							)
 						),*
 					]
@@ -163,15 +133,27 @@ macro_rules! untyped_descriptor_set_layout {
 macro_rules! descriptor_set_layout {
 	{
 		$vis:vis struct $id:ident {
-			$($loc:literal => $ty:ident ($($stage:ident),*)),*
+			$($loc:literal ($stages:ty) => $ty:ty),*
 		}
 	} => {
 		$vis struct $id;
 
-		unsafe impl<T> $crate::descriptor::set::layout::Matches<T> for $id where
+		$(
+			unsafe impl $crate::descriptor::set::layout::BindLocation<$loc> for $id {
+				type Binding = $ty;
+				type Stages = $stages;
+			}
+		)*
+
+		unsafe impl<U: $crate::descriptor::set::layout::Subset<$id>> $crate::descriptor::set::layout::WellTyped<U> for $id where
 			$(
-				T: $crate::descriptor::set::layout::BindUntypedLocation<$loc>
-			),*
+				U: $crate::descriptor::set::layout::BindUntypedLocation<$loc>,
+				$ty: $crate::descriptor::WellTyped<
+					{<U as $crate::descriptor::set::layout::BindUntypedLocation<$loc>>::TYPE},
+					{<U as $crate::descriptor::set::layout::BindUntypedLocation<$loc>>::COUNT}
+				>,
+				$stages: $crate::pipeline::shader::stages::Subset<<U as $crate::descriptor::set::layout::BindUntypedLocation<$loc>>::Stages>
+			)*
 		{}
 	};
 }
@@ -179,18 +161,21 @@ macro_rules! descriptor_set_layout {
 pub unsafe trait BindUntypedLocation<const N: u32> {
 	const TYPE: crate::descriptor::Type;
 	const COUNT: u32;
-	const STAGES: shader::Stages;
+
+	type Stages: crate::pipeline::shader::StageSet;
 }
 
 /// Property of a typed layout having a binding
 /// at location `N`.
 pub unsafe trait BindLocation<const N: u32> {
 	/// Binding type.
-	type Type;
+	type Binding;
+
+	type Stages: crate::pipeline::shader::StageSet;
 }
 
 pub unsafe trait BindSet<const N: u32> {
-	type Type;
+	type Set;
 }
 
 /// Raw layout instance.
@@ -231,12 +216,6 @@ impl Drop for Raw {
 	}
 }
 
-// /// Property for a given layout having defining the given descriptor.
-// pub unsafe trait HasDescriptor<D: Descriptor> {
-// 	/// Descriptor binding.
-// 	const BINDING: u32;
-// }
-
 /// List of descriptor set layouts.
 /// 
 /// ## Safety
@@ -244,7 +223,7 @@ impl Drop for Raw {
 /// The handles **must** never change and refer to valid
 /// descriptor set layouts.
 pub unsafe trait Layouts {
-	type Handles<'a>: AsRef<[Handle]>;
+	type Handles<'a>: AsRef<[Handle]> where Self: 'a;
 
 	fn handles(&self) -> Self::Handles<'_>;
 }
@@ -265,22 +244,22 @@ pub unsafe trait Layouts {
 macro_rules! untyped_descriptor_set_layouts {
 	{
 		$vis:vis struct $id:ident {
-			$($loc:literal : $ty:ty),*
+			$($index:literal : $set_ty:ty),*
 		}
 	} => {
 		$vis struct $id {
 			layouts: (
-				$(std::sync::Arc<$ty>),*
+				$(std::sync::Arc<$set_ty>),*
 			),
 			handles: [
 				$crate::descriptor::set::layout::Handle;
-				$crate::untyped_descriptor_set_layouts!(@count [$($loc),*])
+				$crate::untyped_descriptor_set_layouts!(@count [$($index),*])
 			]
 		}
 
 		$(
-			unsafe impl $crate::descriptor::set::layout::BindSet<$loc> for $id {
-				type Type = $ty;
+			unsafe impl $crate::descriptor::set::layout::BindSet<$index> for $id {
+				type Set = $set_ty;
 			}
 		)*
 
@@ -292,14 +271,12 @@ macro_rules! untyped_descriptor_set_layouts {
 			}
 		}
 
-		// unsafe impl<T> $crate::descriptor::set::layout::WellTypedBy<T> for $id where
-		// 	T: $crate::descriptor::set::layout::Matches<Self>,
-		// 	$(
-		// 		T: $crate::descriptor::set::layout::BindTypedLocation<$loc>,
-		// 		<T as $crate::descriptor::set::layout::BindTypedLocation<$loc>>::Type:
-		// 			$crate::descriptor::ty::ArrayLen<$count>
-		// 	),*
-		// {}
+		unsafe impl<T> $crate::descriptor::set::layout::Subset<T> for $id
+		where
+			$(
+				T: $crate::descriptor::set::layout::BindSet<$index>
+			),*
+		{}
 	};
 	(@count []) => { 0usize };
 	(@count [$a:literal]) => { 1usize };
@@ -310,28 +287,28 @@ macro_rules! untyped_descriptor_set_layouts {
 macro_rules! descriptor_set_layouts {
 	{
 		$vis:vis struct $id:ident {
-			$($loc:literal : $ty:ty),*
+			$($index:literal : $set_ty:ty),*
 		}
 	} => {
 		$vis struct $id;
 
 		$(
-			unsafe impl $crate::descriptor::set::layout::BindSet<$loc> for $id {
-				type Type = $ty;
+			unsafe impl $crate::descriptor::set::layout::BindSet<$index> for $id {
+				type Set = $set_ty;
 			}
 		)*
 
-		unsafe impl<T> $crate::descriptor::set::layout::Matches<T> for $id where
+		unsafe impl<U: $crate::descriptor::set::layout::Subset<$id>> $crate::descriptor::set::layout::WellTyped<U> for $id where
 			$(
-				T: $crate::descriptor::set::layout::BindSet<$loc>,
-				$ty: $crate::descriptor::set::layout::Matches<<T as $crate::descriptor::set::layout::BindSet<$loc>>::Type>
+				U: $crate::descriptor::set::layout::BindSet<$index>,
+				$set_ty: $crate::descriptor::set::layout::WellTyped<<U as $crate::descriptor::set::layout::BindSet<$index>>::Set>
 			),*
 		{}
 	};
 }
 
 unsafe impl<L: Layout> Layouts for L {
-	type Handles<'a> = [Handle; 1];
+	type Handles<'a> where Self: 'a = [Handle; 1];
 
 	fn handles<'a>(&'a self) -> Self::Handles<'a> {
 		[self.handle()]
@@ -346,6 +323,3 @@ unsafe impl Layouts for () {
 		&[]
 	}
 }
-
-// /// The empty set layouts is compatible with anything.
-// unsafe impl<L: Layouts> CompatibleWith<L> for () {}

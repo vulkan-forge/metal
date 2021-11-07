@@ -6,7 +6,7 @@ pub unsafe trait PushConstants {
 }
 
 pub unsafe trait Setter<C: PushConstants> {
-	type Ranges<'a>: AsRef<[(Range, *const u8)]>;
+	type Ranges<'a>: AsRef<[(Range, *const u8)]> where Self: 'a;
 
 	fn ranges<'a>(&'a self) -> Self::Ranges<'a>;
 }

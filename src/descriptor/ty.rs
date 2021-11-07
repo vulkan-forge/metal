@@ -31,17 +31,17 @@ pub trait DataType {
 	const COUNT: u32;
 }
 
-/// Type that represent a descriptor type, count and accessing stages.
-pub trait AccessedDataType {
-	const DESCRIPTOR_TYPE: Type;
-	const COUNT: u32;
-	const STAGES: shader::Stages;
-}
+// /// Type that represent a descriptor type, count and accessing stages.
+// pub trait AccessedDataType {
+// 	const DESCRIPTOR_TYPE: Type;
+// 	const COUNT: u32;
+// 	const STAGES: shader::Stages;
+// }
 
-/// Marker for descriptor type.
-pub unsafe trait WellTyped<const TYPE: Type, const COUNT: u32, const STAGES: crate::pipeline::shader::Stages> {}
+// /// Marker for descriptor type.
+// pub unsafe trait WellTyped<const TYPE: Type, const COUNT: u32, const STAGES: crate::pipeline::shader::Stages> {}
 
-unsafe impl<T: AccessedDataType> WellTyped<{T::DESCRIPTOR_TYPE}, {T::COUNT}, {T::STAGES}> for T {}
+// unsafe impl<T: AccessedDataType> WellTyped<{T::DESCRIPTOR_TYPE}, {T::COUNT}, {T::STAGES}> for T {}
 
 pub trait Array {
 	const COUNT: u32;
@@ -66,15 +66,24 @@ unsafe impl<T: Array> ArrayLen<{T::COUNT}> for T {}
 
 pub struct UniformBuffer<T>(PhantomData<T>);
 
+// unsafe impl<B, T> crate::descriptor::set::layout::WellTyped<B> for UniformBuffer<T>
+// where
+// 	// ...
+// {}
+
 impl<T: Array> DataType for UniformBuffer<T> {
 	const DESCRIPTOR_TYPE: Type = Type::UniformBuffer;
 	const COUNT: u32 = T::COUNT;
 }
 
-pub struct Accessed<T, const STAGES: shader::Stages>(PhantomData<T>);
+pub unsafe trait WellTyped<const DESCRIPTOR_TYPE: Type, const COUNT: u32> {}
 
-impl<T: DataType, const STAGES: shader::Stages> AccessedDataType for Accessed<T, STAGES> {
-	const DESCRIPTOR_TYPE: Type = T::DESCRIPTOR_TYPE;
-	const COUNT: u32 = T::COUNT;
-	const STAGES: shader::Stages = STAGES;
-}
+unsafe impl<T: DataType> WellTyped<{T::DESCRIPTOR_TYPE}, {T::COUNT}> for T {}
+
+// pub struct Accessed<T, const STAGES: shader::Stages>(PhantomData<T>);
+
+// impl<T: DataType, const STAGES: shader::Stages> AccessedDataType for Accessed<T, STAGES> {
+// 	const DESCRIPTOR_TYPE: Type = T::DESCRIPTOR_TYPE;
+// 	const COUNT: u32 = T::COUNT;
+// 	const STAGES: shader::Stages = STAGES;
+// }

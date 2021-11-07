@@ -34,14 +34,14 @@ impl From<vk::Result> for CreationError {
 
 pub type Handle = vk::PipelineLayout;
 
-pub unsafe trait Layout: resource::Reference<Handle=Handle> {
+pub unsafe trait UntypedLayout: resource::Reference<Handle=Handle> {
 	type PushConstants: PushConstants;
 	type DescriptorSets: descriptor::set::Layouts;
 }
 
-unsafe impl<L: std::ops::Deref> Layout for L where L::Target: Layout {
-	type PushConstants = <L::Target as Layout>::PushConstants;
-	type DescriptorSets = <L::Target as Layout>::DescriptorSets;
+unsafe impl<L: std::ops::Deref> UntypedLayout for L where L::Target: UntypedLayout {
+	type PushConstants = <L::Target as UntypedLayout>::PushConstants;
+	type DescriptorSets = <L::Target as UntypedLayout>::DescriptorSets;
 }
 
 /// Layout without descriptor sets.
@@ -55,16 +55,6 @@ impl<P: PushConstants> NoSets<P> {
 
 /// Empty layout.
 pub type Empty = NoSets<()>;
-
-// /// Layout compatibility marker.
-// /// 
-// /// This correspond to the notion of ["compatible for set N"](https://www.khronos.org/registry/vulkan/specs/1.2-extensions/html/vkspec.html#descriptorsets-compatibility)
-// /// in the vulkan specification.
-// pub unsafe trait CompatibleWith<L>: Layout {
-// 	// ...
-// }
-
-// unsafe impl<P: PushConstants, L: Layout<PushConstants=P>, M: Layout<PushConstants=P>> CompatibleWith<L> for M where L::DescriptorSets: descriptor::set::layout::CompatibleWith<M::DescriptorSets> {}
 
 pub struct Raw<C: PushConstants, S: descriptor::set::Layouts> {
 	device: Arc<Device>,
@@ -112,13 +102,6 @@ impl<C: PushConstants, S: descriptor::set::Layouts> Raw<C, S> {
 	}
 }
 
-// unsafe impl<P: PushConstants, S: descriptor::set::Layouts> resource::AbstractReference for Raw<P, S> {
-// 	fn uid(&self) -> u64 {
-// 		use ash::vk::Handle;
-// 		self.handle.as_raw()
-// 	}
-// }
-
 unsafe impl<P: PushConstants, S: descriptor::set::Layouts> resource::Reference for Raw<P, S> {
 	type Handle = Handle;
 
@@ -127,7 +110,7 @@ unsafe impl<P: PushConstants, S: descriptor::set::Layouts> resource::Reference f
 	}
 }
 
-unsafe impl<P: PushConstants, S: descriptor::set::Layouts> Layout for Raw<P, S> {
+unsafe impl<P: PushConstants, S: descriptor::set::Layouts> UntypedLayout for Raw<P, S> {
 	type PushConstants = P;
 	type DescriptorSets = S;
 }
@@ -140,10 +123,10 @@ impl<C: PushConstants, S: descriptor::set::Layouts> Drop for Raw<C, S> {
 	}
 }
 
-/// Creates a new pipeline layout type.
+/// Creates a new untyped pipeline layout type.
 /// 
 /// The created type will be a newtype wrapping a [`Raw`] pipeline layout and
-/// implementing the [`Layout`] trait.
+/// implementing the [`UntypedLayout`] trait.
 /// 
 /// ## Example
 /// 
@@ -165,28 +148,52 @@ macro_rules! untyped_pipeline_layout {
 		}
 	} => {
 		$(#[$doc])*
-		$vis struct $id($crate::pipeline::layout::Raw<
+		$vis type $id = $crate::pipeline::layout::Raw<
 			$push_constants,
 			$descriptor_sets
-		>);
+		>;
+	};
+}
 
-		// unsafe impl $crate::resource::AbstractReference for $id {
-		// 	fn uid(&self) -> u64 {
-		// 		self.0.handle().as_raw()
-		// 	}
-		// }
+/// Well typed layout.
+/// 
+/// A layout a well typed with regards to the untyped layout U
+/// if `Self::PushConstants = U::PushConstants` and
+/// `Self::DescriptorSets: descriptor::set::layout::WellTyped<U::DescriptorSets>`.
+pub unsafe trait WellTyped<U> {}
 
-		unsafe impl $crate::resource::Reference for $id {
-			type Handle = $crate::pipeline::layout::Handle;
+/// Typed pipeline layout.
+pub unsafe trait Layout: WellTyped<<Self as Layout>::Untyped> {
+	/// Untyped layout.
+	type Untyped: UntypedLayout;
 
-			fn handle(&self) -> Self::Handle {
-				self.0.handle()
-			}
+	type PushConstants;
+	type DescriptorSets;
+}
+
+/// Creates a new typed pipeline layout.
+#[macro_export]
+macro_rules! pipeline_layout {
+	{
+		$(#[$doc:meta])*
+		$vis:vis struct $id:ident : $untyped_layout:ty {
+			type PushConstants = $push_constants:ty;
+			type DescriptorSets = $descriptor_sets:ty;
 		}
+	} => {
+		$(#[$doc])*
+		$vis struct $id;
 
 		unsafe impl $crate::pipeline::Layout for $id {
+			type Untyped = $untyped_layout;
+
 			type PushConstants = $push_constants;
 			type DescriptorSets = $descriptor_sets;
 		}
+
+		unsafe impl<U: $crate::pipeline::UntypedLayout<PushConstants = $push_constants>> $crate::pipeline::layout::WellTyped<U> for $id
+		where
+			$descriptor_sets: $crate::descriptor::set::layout::WellTyped<U::DescriptorSets>
+		{}
 	};
 }

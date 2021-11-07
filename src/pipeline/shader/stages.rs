@@ -5,7 +5,7 @@ macro_rules! stages {
 		$(#[$meta:meta])*
 		$elem:ident => $variant:ident = $vulkan_const:ident
 	),*) => {
-		#[derive(Clone, Copy, Debug)]
+		#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 		#[repr(u32)]
 		pub enum Stage {
 			$(
@@ -13,6 +13,14 @@ macro_rules! stages {
 				$variant = vk::ShaderStageFlags::$vulkan_const.as_raw()
 			),*
 		}
+
+		$(
+			shader_stage_set! {
+				pub struct $variant {
+					$variant
+				}
+			}
+		)*
 
 		impl Stage {
 			pub(crate) fn into_vulkan(self) -> vk::ShaderStageFlags {
@@ -70,15 +78,6 @@ macro_rules! stages {
 			}
 
 			#[inline]
-			pub fn insert(&mut self, stage: Stage) {
-				match stage {
-					$(
-						Stage::$variant => self.$elem = true
-					),+
-				}
-			}
-
-			#[inline]
 			pub fn len(&self) -> usize {
 				let mut len = 0;
 				$(
@@ -88,6 +87,24 @@ macro_rules! stages {
 				)+
 
 				len
+			}
+
+			#[inline]
+			pub const fn contains(&self, stage: Stage) -> bool {
+				match stage {
+					$(
+						Stage::$variant => self.$elem
+					),+
+				}
+			}
+
+			#[inline]
+			pub const fn into_contains(self, stage: Stage) -> bool {
+				match stage {
+					$(
+						Stage::$variant => self.$elem
+					),+
+				}
 			}
 
 			/// Checks whether we have more stages enabled than `other`.
@@ -102,6 +119,15 @@ macro_rules! stages {
 			#[inline]
 			pub const fn intersects(&self, other: &Stages) -> bool {
 				stages!( @intersects (self, other) [$($elem,)*] )
+			}
+
+			#[inline]
+			pub fn insert(&mut self, stage: Stage) {
+				match stage {
+					$(
+						Stage::$variant => self.$elem = true
+					),+
+				}
 			}
 
 			#[inline]
@@ -170,6 +196,36 @@ macro_rules! stages {
 	};
 }
 
+#[macro_export]
+macro_rules! shader_stage_set {
+	{
+		$vis:vis struct $id:ident {
+			$($stage:ident),*
+		}
+	} => {
+		$vis struct $id;
+
+		impl $crate::pipeline::shader::StageSet for $id {
+			const STAGES: $crate::pipeline::shader::Stages = $crate::pipeline::shader::Stages::from_array([
+				$(
+					$crate::pipeline::shader::Stage::$stage
+				),*
+			]);
+		}
+
+		$(
+			unsafe impl $crate::pipeline::shader::stages::Contains<{$crate::pipeline::shader::Stage::$stage}> for $id {}
+		)*
+
+		unsafe impl<S: StageSet> Subset<S> for $id
+		where
+			$(
+				S: $crate::pipeline::shader::stages::Contains<{$crate::pipeline::shader::Stage::$stage}>
+			),*
+		{}
+	};
+}
+
 stages! {
 	vertex => Vertex = VERTEX,
 	tessellation_control => TesselationControl = TESSELLATION_CONTROL,
@@ -177,6 +233,12 @@ stages! {
 	geometry => Geometry = GEOMETRY,
 	fragment => Fragment = FRAGMENT,
 	compute => Compute = COMPUTE
+}
+
+shader_stage_set! {
+	pub struct AllGraphics {
+		Vertex, TesselationControl, TesselationEvaluation, Geometry, Fragment
+	}
 }
 
 impl Stages {
@@ -234,3 +296,17 @@ impl Stages {
 		}
 	}
 }
+
+pub trait StageSet {
+	const STAGES: Stages;
+}
+
+/// Stage set that contains the given `STAGE`.
+/// 
+/// ## Safety
+/// 
+/// This trait must not be implemented unless
+/// `Self::STAGES` actual contains `STAGE`.
+pub unsafe trait Contains<const STAGE: Stage>: StageSet {}
+
+pub unsafe trait Subset<S: StageSet>: StageSet {}

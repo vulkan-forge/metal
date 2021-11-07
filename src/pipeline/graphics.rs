@@ -19,7 +19,7 @@ use super::{
 	shader,
 	Handle,
 	Stages,
-	Layout,
+	UntypedLayout,
 	vertex_input,
 	VertexInput,
 	InputAssembly,
@@ -52,7 +52,7 @@ impl From<vk::Result> for CreationError {
 }
 
 pub trait Graphics: resource::Reference<Handle=Handle> {
-	type Layout: Layout;
+	type Layout: UntypedLayout;
 	type VertexInput: VertexInput;
 	
 	type ViewportsScissors: dynamic_state::ViewportsScissors;
@@ -78,7 +78,7 @@ pub trait Graphics: resource::Reference<Handle=Handle> {
 /// }
 /// ```
 pub struct Raw<
-	L: Layout,
+	L: UntypedLayout,
 	I: VertexInput,
 	V: dynamic_state::ViewportsScissors,
 	R: dynamic_state::Rasterization,
@@ -231,7 +231,7 @@ macro_rules! graphics_pipeline {
 }
 
 impl<
-	L: Layout,
+	L: UntypedLayout,
 	I: VertexInput,
 	V: dynamic_state::ViewportsScissors,
 	R: dynamic_state::Rasterization,
@@ -382,7 +382,7 @@ impl<
 }
 
 impl<
-	L: Layout,
+	L: UntypedLayout,
 	I: VertexInput,
 	V: dynamic_state::ViewportsScissors,
 	R: dynamic_state::Rasterization,

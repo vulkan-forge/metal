@@ -17,7 +17,7 @@ pub mod dynamic_state;
 pub mod graphics;
 
 pub use stage::Stages;
-pub use layout::Layout;
+pub use layout::{UntypedLayout, Layout};
 pub use vertex_input::VertexInput;
 pub use input_assembly::InputAssembly;
 pub use tesselation::Tesselation;
