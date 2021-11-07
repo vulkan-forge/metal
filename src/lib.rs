@@ -20,6 +20,7 @@
 #![feature(trait_alias)]
 #![feature(specialization)]
 #![feature(generic_const_exprs)]
+#![feature(adt_const_params)]
 
 #[doc(hidden)]
 pub use std;

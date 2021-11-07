@@ -5,7 +5,7 @@ pub mod set;
 pub mod pool;
 // pub mod update;
 
-pub use ty::{Type, SizedType};
+pub use ty::{Type, DataType};
 
 pub use set::{
 	Set,

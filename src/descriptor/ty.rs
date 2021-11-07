@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 use ash::vk;
+use crate::pipeline::shader;
 
 /// Descriptor type.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -25,10 +26,22 @@ impl Type {
 }
 
 /// Type that represent a descriptor type and count.
-pub trait SizedType {
-	const TYPE: Type;
+pub trait DataType {
+	const DESCRIPTOR_TYPE: Type;
 	const COUNT: u32;
 }
+
+/// Type that represent a descriptor type, count and accessing stages.
+pub trait AccessedDataType {
+	const DESCRIPTOR_TYPE: Type;
+	const COUNT: u32;
+	const STAGES: shader::Stages;
+}
+
+/// Marker for descriptor type.
+pub unsafe trait WellTyped<const TYPE: Type, const COUNT: u32, const STAGES: crate::pipeline::shader::Stages> {}
+
+unsafe impl<T: AccessedDataType> WellTyped<{T::DESCRIPTOR_TYPE}, {T::COUNT}, {T::STAGES}> for T {}
 
 pub trait Array {
 	const COUNT: u32;
@@ -53,7 +66,15 @@ unsafe impl<T: Array> ArrayLen<{T::COUNT}> for T {}
 
 pub struct UniformBuffer<T>(PhantomData<T>);
 
-impl<T: Array> SizedType for UniformBuffer<T> {
-	const TYPE: Type = Type::UniformBuffer;
+impl<T: Array> DataType for UniformBuffer<T> {
+	const DESCRIPTOR_TYPE: Type = Type::UniformBuffer;
 	const COUNT: u32 = T::COUNT;
+}
+
+pub struct Accessed<T, const STAGES: shader::Stages>(PhantomData<T>);
+
+impl<T: DataType, const STAGES: shader::Stages> AccessedDataType for Accessed<T, STAGES> {
+	const DESCRIPTOR_TYPE: Type = T::DESCRIPTOR_TYPE;
+	const COUNT: u32 = T::COUNT;
+	const STAGES: shader::Stages = STAGES;
 }

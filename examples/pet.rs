@@ -1,14 +1,40 @@
 #![feature(generic_associated_types)]
 
+magma::untyped_descriptor_set_layout! {
+    pub struct UniformBuffer0Vertex {
+        0u32 => UniformBuffer (Vertex)
+    }
+}
+
+magma::untyped_descriptor_set_layout! {
+    pub struct UniformBuffer0Fragment {
+        0u32 => UniformBuffer (Fragment)
+    }
+}
+
+magma::untyped_descriptor_set_layouts! {
+    pub struct UniformBuffer0VertexOn0UniformBuffer0FragmentOn1 {
+        0u32 : UniformBuffer0Vertex ,
+        1u32 : UniformBuffer0Fragment
+    }
+}
+
+magma::untyped_pipeline_layout! {
+    pub struct SpriteLayout {
+        type PushConstants = () ;
+        type DescriptorSets = UniformBuffer0VertexOn0UniformBuffer0FragmentOn1 ;
+    }
+}
+
 magma::descriptor_set_layout! {
     pub struct TransformationOn0 {
-        0u32 => UniformBuffer [1u32] (Vertex)
+        0u32 => UniformBuffer (Vertex)
     }
 }
 
 magma::descriptor_set_layout! {
     pub struct SpriteOn0 {
-        0u32 => UniformBuffer [1u32] (Fragment)
+        0u32 => UniformBuffer (Fragment)
     }
 }
 
@@ -19,12 +45,7 @@ magma::descriptor_set_layouts! {
     }
 }
 
-magma::pipeline_layout! {
-    pub struct SpriteLayout {
-        type PushConstants = () ;
-        type DescriptorSets = BindTransformationOn0To0SpriteOn0To1 ;
-    }
-}
+// pipeline layout.
 
 magma::vertex_input_bindings! {
     pub struct SpriteInputBindings {

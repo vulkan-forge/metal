@@ -148,7 +148,7 @@ impl<C: PushConstants, S: descriptor::set::Layouts> Drop for Raw<C, S> {
 /// ## Example
 /// 
 /// ```
-/// pipeline_layout! {
+/// untyped_pipeline_layout! {
 /// 	/// My pipeline layout.
 /// 	pub struct MyLayout {
 /// 		// ...
@@ -156,7 +156,7 @@ impl<C: PushConstants, S: descriptor::set::Layouts> Drop for Raw<C, S> {
 /// }
 /// ```
 #[macro_export]
-macro_rules! pipeline_layout {
+macro_rules! untyped_pipeline_layout {
 	{
 		$(#[$doc:meta])*
 		$vis:vis struct $id:ident {

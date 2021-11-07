@@ -21,6 +21,12 @@ pub type Handle = vk::DescriptorSetLayout;
 /// Untyped shader module descriptor set layout
 /// well typed by the typed shader module descriptor set layout
 /// `T`.
+/// 
+/// The `T` layout type is a well typed version of `Self` if
+/// - it matches `Self` (every binding defined in `T` is defined in `Self`)
+/// - every binding defined in `Self` is defined in `T` and its
+///   definition matches the constraints defined in `Self`
+///   (descriptor type, count and accessing shader stages).
 pub unsafe trait WellTypedBy<T> {}
 
 /// Typed shader module descriptor set layout
@@ -74,7 +80,7 @@ pub trait Layout: resource::Reference<Handle=Handle> {}
 macro_rules! untyped_descriptor_set_layout {
 	{
 		$vis:vis struct $id:ident {
-			$($loc:literal => $ty:ident $([$count:literal])* ($($stage:ident),*)),*
+			$($loc:literal => $ty:tt ($($stage:ident),*)),*
 		}
 	} => {
 		$vis struct $id($crate::descriptor::set::layout::Raw);
@@ -91,8 +97,8 @@ macro_rules! untyped_descriptor_set_layout {
 
 		$(
 			unsafe impl $crate::descriptor::set::layout::BindUntypedLocation<$loc> for $id {
-				const TYPE: $crate::descriptor::Type = $ty;
-				const COUNT: u32 = $crate::descriptor_set_layout!(@count $([$count])*);
+				const TYPE: $crate::descriptor::Type = $crate::untyped_descriptor_set_layout!(@ty $ty);
+				const COUNT: u32 = $crate::untyped_descriptor_set_layout!(@count $ty);
 				const STAGES: $crate::pipeline::shader::Stages = $crate::pipeline::shader::Stages::from_array([
 					$(
 						$crate::pipeline::shader::Stage::$stage
@@ -101,16 +107,27 @@ macro_rules! untyped_descriptor_set_layout {
 			}
 		)*
 
+		/// The `T` layout type is a well typed version of `Self` if
+		/// - it matches `Self` (every binding defined in `T` is defined in `Self`)
+		/// - every binding defined in `Self` is defined in `T` and its
+		///   definition matches the constraints defined in `Self`
+		///   (descriptor type, count and accessing shader stages).
 		unsafe impl<T> $crate::descriptor::set::layout::WellTypedBy<T> for $id where
 			T: $crate::descriptor::set::layout::Matches<Self>,
 			$(
-				T: $crate::descriptor::set::layout::BindTypedLocation<$loc>,
-				<T as $crate::descriptor::set::layout::BindTypedLocation<$loc>>::Type:
-					$crate::descriptor::ty::WellTyped<$ty, $count, $crate::pipeline::shader::Stages::from_array([
-						$(
-							$crate::pipeline::shader::Stage::$stage
-						),*
-					])>
+				T: $crate::descriptor::set::layout::BindLocation<$loc>,
+				<T as $crate::descriptor::set::layout::BindLocation<$loc>>::Type:
+					$crate::descriptor::ty::WellTyped<
+						{ $crate::untyped_descriptor_set_layout!(@ty $ty) },
+						{ $crate::untyped_descriptor_set_layout!(@count $ty) },
+						{
+							$crate::pipeline::shader::Stages::from_array([
+								$(
+									$crate::pipeline::shader::Stage::$stage
+								),*
+							])
+						}
+					>
 			),*
 		{}
 
@@ -122,8 +139,8 @@ macro_rules! untyped_descriptor_set_layout {
 						$(
 							$crate::descriptor::set::layout::Binding::new(
 								$loc,
-								$crate::descriptor::Type::$ty,
-								$crate::descriptor_set_layout!(@count $([$count])*),
+								$crate::untyped_descriptor_set_layout!(@ty $ty),
+								$crate::untyped_descriptor_set_layout!(@count $ty),
 								$crate::pipeline::shader::Stages::from_array([
 									$(
 										$crate::pipeline::shader::Stage::$stage
@@ -136,8 +153,10 @@ macro_rules! untyped_descriptor_set_layout {
 			}
 		}
 	};
-	(@count [$count:literal]) => { $count };
-	(@count) => { 1 }
+	(@ty [$ty:ident; $count:literal]) => { $crate::descriptor::Type::$ty };
+	(@ty $ty:ident) => { $crate::descriptor::Type::$ty };
+	(@count [$ty:ident; $count:literal]) => { $count };
+	(@count $ty:ident) => { 1u32 };
 }
 
 #[macro_export]
@@ -230,12 +249,12 @@ pub unsafe trait Layouts {
 	fn handles(&self) -> Self::Handles<'_>;
 }
 
-/// Creates a list of descriptor set layouts.
+/// Creates a list of untyped descriptor set layouts.
 /// 
 /// ## Example
 /// 
 /// ```
-/// descriptor_set_layouts! {
+/// untyped_descriptor_set_layouts! {
 ///   pub struct MyDescriptorSetLayouts {
 ///     0 : MySet0Layout,
 ///     1 : MySet1Layout
@@ -255,7 +274,7 @@ macro_rules! untyped_descriptor_set_layouts {
 			),
 			handles: [
 				$crate::descriptor::set::layout::Handle;
-				$crate::descriptor_set_layouts!(@count [$($loc),*])
+				$crate::untyped_descriptor_set_layouts!(@count [$($loc),*])
 			]
 		}
 
@@ -284,7 +303,7 @@ macro_rules! untyped_descriptor_set_layouts {
 	};
 	(@count []) => { 0usize };
 	(@count [$a:literal]) => { 1usize };
-	(@count [$a:literal, $($b:literal),+]) => { 1usize + $crate::descriptor_set_layouts!(@count [$($b),+]) };
+	(@count [$a:literal, $($b:literal),+]) => { 1usize + $crate::untyped_descriptor_set_layouts!(@count [$($b),+]) };
 }
 
 #[macro_export]
